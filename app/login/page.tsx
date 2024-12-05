@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Lock, Mail, User } from 'lucide-react';
+import { login, signup } from './actions';
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -27,7 +28,6 @@ const AuthPage = () => {
       username: '',
     };
 
-    // Email validation
     if (!formData.email) {
       newErrors.email = 'Email is required';
       isValid = false;
@@ -36,7 +36,6 @@ const AuthPage = () => {
       isValid = false;
     }
 
-    // Password validation
     if (!formData.password) {
       newErrors.password = 'Password is required';
       isValid = false;
@@ -45,7 +44,6 @@ const AuthPage = () => {
       isValid = false;
     }
 
-    // Username validation for signup
     if (!isLogin && !formData.username) {
       newErrors.username = 'Username is required';
       isValid = false;
@@ -55,22 +53,12 @@ const AuthPage = () => {
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validateForm()) {
-      // Handle form submission
-      console.log('Form submitted:', formData);
-      // Add your authentication logic here
-    }
-  };
-
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
       [name]: value
     }));
-    // Clear error when user starts typing
     if (errors[name as keyof typeof errors]) {
       setErrors(prev => ({
         ...prev,
@@ -91,7 +79,7 @@ const AuthPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form className="space-y-4">
             {!isLogin && (
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>
@@ -105,6 +93,7 @@ const AuthPage = () => {
                     className="pl-10"
                     value={formData.username}
                     onChange={handleInputChange}
+                    required
                   />
                 </div>
                 {errors.username && (
@@ -125,6 +114,7 @@ const AuthPage = () => {
                   className="pl-10"
                   value={formData.email}
                   onChange={handleInputChange}
+                  required
                 />
               </div>
               {errors.email && (
@@ -144,6 +134,7 @@ const AuthPage = () => {
                   className="pl-10"
                   value={formData.password}
                   onChange={handleInputChange}
+                  required
                 />
               </div>
               {errors.password && (
@@ -162,9 +153,22 @@ const AuthPage = () => {
               </div>
             )}
 
-            <Button type="submit" className="w-full">
-              {isLogin ? 'Login' : 'Sign Up'}
-            </Button>
+            <div className="space-y-2">
+              <Button 
+                formAction={async (formData: FormData) => {
+                  if (validateForm()) {
+                    if (isLogin) {
+                      await login(formData);
+                    } else {
+                      await signup(formData);
+                    }
+                  }
+                }}
+                className="w-full"
+              >
+                {isLogin ? 'Login' : 'Sign Up'}
+              </Button>
+            </div>
           </form>
         </CardContent>
         <CardFooter>
