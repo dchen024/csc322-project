@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowRight, Shield, Clock, DollarSign, Gift, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import Link from 'next/link';
 
 const LandingPage = () => {
   const features = [
@@ -40,12 +41,16 @@ const LandingPage = () => {
             <h1 className="text-5xl font-bold mb-6">Welcome to BidBay</h1>
             <p className="text-xl mb-8">Your Premier Online Auction Marketplace</p>
             <div className="flex gap-4 justify-center">
+              <Link href={"/login"} >
               <Button size="lg" className="bg-white text-black hover:bg-gray-100">
                 Start Bidding
               </Button>
+              </Link>
+              <Link href={"/login"} >
               <Button size="lg" variant="outline" className="border-white text-black hover:bg-gray-100">
                 List an Item
               </Button>
+              </Link>
             </div>
           </div>
         </div>
@@ -96,9 +101,11 @@ const LandingPage = () => {
         <div className="max-w-7xl mx-auto px-4 text-center">
           <h2 className="text-3xl font-bold mb-6">Ready to Start?</h2>
           <p className="text-xl text-gray-600 mb-8">Join thousands of users buying and selling unique items daily</p>
+          <Link href={"/login"} >
           <Button size="lg" className="bg-black hover:bg-gray-800">
             Create Account <ArrowRight className="ml-2" />
           </Button>
+          </Link>
         </div>
       </div>
     </div>
