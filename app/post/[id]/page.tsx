@@ -146,6 +146,49 @@ const ListingPage = () => {
     }
   };
 
+  // Function to toggle watchlist status
+  const toggleWatchlist = async (postId: string, userId: string) => {
+    try {
+      // Check if item exists in watchlist
+      const { data: existingItem } = await supabase
+        .from('watchlist')
+        .select()
+        .eq('post_id', postId)
+        .eq('user_id', userId)
+        .single();
+  
+      if (existingItem) {
+        // Remove from watchlist
+        const { error } = await supabase
+          .from('watchlist')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', userId);
+  
+        if (error) throw error;
+        
+        // Update UI state (assuming you have some state management)
+        setIsWatchlisted(false);
+      } else {
+        // Add to watchlist
+        const { error } = await supabase
+          .from('watchlist')
+          .insert([
+            {
+              post_id: postId,
+              user_id: userId
+            }
+          ]);
+  
+        if (error) throw error;
+        
+        // Update UI state
+        setIsWatchlisted(true);
+      }
+    } catch (error) {
+      console.error('Error toggling watchlist:', error);
+    }
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -197,7 +240,7 @@ const ListingPage = () => {
             <Button
               variant={isWatchlisted ? "secondary" : "outline"}
               size="icon"
-              onClick={() => setIsWatchlisted(!isWatchlisted)}
+              onClick={() => toggleWatchlist(postId, post.poster_id)}
             >
               <Heart className={`w-4 h-4 ${isWatchlisted ? 'fill-current' : ''}`} />
             </Button>
