@@ -1,192 +1,215 @@
 "use client"
-import React, { useState } from 'react';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Star, 
-  StarHalf, 
-  Heart,
-  User
-} from 'lucide-react';
+import React, { useState, useEffect, use } from 'react';
+import { createClient } from '@/utils/supabase/client';
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { redirect } from 'next/navigation';
 
-const ListingPage = () => {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [isWatchlisted, setIsWatchlisted] = useState(false);
-  const [isBidding, setIsBidding] = useState(false);
-  const [bidAmount, setBidAmount] = useState('');
+const supabase = createClient();
 
-  // Placeholder data
-  const images = Array(5).fill(null);
-  const listing = {
-    title: "Vintage Camera",
-    seller: "Camera Enthusiast",
-    rating: 4.5,
-    currentBid: 150,
-    timeLeft: "2 days",
-    description: "A beautiful vintage camera in excellent condition. Perfect for collectors or photography enthusiasts. Comes with original leather case and manual."
-  };
+const CreatePostPage = () => {
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [startingBid, setStartingBid] = useState('');
+  const [expireDate, setExpireDate] = useState('');
+  const [images, setImages] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [user, setUser] = useState<any>(null);
 
-  const nextImage = () => {
-    setCurrentImageIndex((prev) => 
-      prev === images.length - 1 ? 0 : prev + 1
-    );
-  };
-
-  const prevImage = () => {
-    setCurrentImageIndex((prev) => 
-      prev === 0 ? images.length - 1 : prev - 1
-    );
-  };
-
-  const handleBidSubmit = (e: React.FormEvent) => {
+  const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    // Handle bid submission
-    setIsBidding(false);
-    setBidAmount('');
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    setImages(prev => [...prev, ...droppedFiles]);
+    
+    droppedFiles.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviews(prev => [...prev, e.target?.result as string]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const sanitizeFileName = (fileName: string) => {
+    return fileName
+      .toLowerCase()
+      .replace(/[^a-z0-9.]/g, '-') 
+      .replace(/--+/g, '-')      
+      .replace(/^-+|-+$/g, '');    
+  };
+
+  useEffect(() => {
+    const getUserInfo = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error || !user) return;
+      console.log(user.user_metadata.username);
+      setUser(user);
+    }
+    getUserInfo();
+    },[]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const imageUrls: string[] = [];
+
+      for (const image of images) {
+        const sanitizedName = sanitizeFileName(image.name);
+        const fileName = `${Date.now()}-${sanitizedName}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('pictures')
+          .upload(fileName, image);
+      
+        if (uploadError) throw uploadError;
+      
+        const { data: { publicUrl } } = supabase.storage
+          .from('pictures')
+          .getPublicUrl(fileName);
+      
+        imageUrls.push(publicUrl);
+      }
+
+      const { data, error } = await supabase
+      .from('post')
+      .insert([
+        {
+          title,
+          description,
+          starting_bid: Math.round(parseFloat(startingBid) * 100),
+          current_bid: Math.round(parseFloat(startingBid) * 100),
+          expire: new Date(expireDate).toISOString(),
+          pictures: JSON.stringify(imageUrls),
+          poster_name: user.user_metadata.username,
+          poster_id: user.id,
+        }
+      ])
+      .select();
+
+      if (error) throw error;
+      
+      // Reset form
+      setTitle('');
+      setDescription('');
+      setStartingBid('');
+      setExpireDate('');
+      setImages([]);
+      setPreviews([]);
+      redirect('/home');
+      
+    } catch (error) {
+      console.error('Error creating post:', error);
+    }
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      {/* Image Carousel */}
-      <div className="relative aspect-[4/3] mb-8">
-        <div className="absolute inset-0 bg-gray-200 rounded-lg overflow-hidden">
-          {/* Placeholder for image */}
-          <div className="w-full h-full flex items-center justify-center text-gray-400">
-            Image {currentImageIndex + 1}
-          </div>
+    <div className="max-w-4xl mx-auto px-4 py-8 grid grid-cols-2 gap-8 mt-16">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="title">Title</Label>
+          <Input
+            id="title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            required
+          />
         </div>
         
-        {/* Navigation Arrows */}
-        <button 
-          onClick={prevImage}
-          className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 shadow-lg transition-all"
-        >
-          <ChevronLeft className="w-6 h-6" />
-        </button>
-        <button 
-          onClick={nextImage}
-          className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 shadow-lg transition-all"
-        >
-          <ChevronRight className="w-6 h-6" />
-        </button>
-
-        {/* Image Indicators */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-          {images.map((_, index) => (
-            <button
-              key={index}
-              className={`w-2 h-2 rounded-full transition-all ${
-                index === currentImageIndex ? 'bg-white w-4' : 'bg-white/60'
-              }`}
-              onClick={() => setCurrentImageIndex(index)}
-            />
-          ))}
+        <div className="space-y-2">
+          <Label htmlFor="description">Description</Label>
+          <Textarea
+            id="description"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            required
+          />
         </div>
-      </div>
-
-      {/* Listing Details */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-start">
-            <div>
-              <CardTitle className="text-2xl mb-2">{listing.title}</CardTitle>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <User className="w-4 h-4" />
-                <span>{listing.seller}</span>
-                <div className="flex items-center">
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <StarHalf className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                  <span className="ml-1">{listing.rating}</span>
-                </div>
-              </div>
-            </div>
-            <Button
-              variant={isWatchlisted ? "secondary" : "outline"}
-              size="icon"
-              onClick={() => setIsWatchlisted(!isWatchlisted)}
-            >
-              <Heart className={`w-4 h-4 ${isWatchlisted ? 'fill-current' : ''}`} />
-            </Button>
-          </div>
-        </CardHeader>
         
-        <CardContent>
-          <p className="text-gray-600 mb-6">{listing.description}</p>
+        <div className="space-y-2">
+          <Label htmlFor="startingBid">Starting Bid</Label>
+          <Input
+            id="startingBid"
+            type="number"
+            min="0"
+            step="0.01"
+            value={startingBid}
+            onChange={(e) => setStartingBid(e.target.value)}
+            required
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="expireDate">Expiration Date</Label>
+          <Input
+            id="expireDate"
+            type="datetime-local"
+            value={expireDate}
+            onChange={(e) => setExpireDate(e.target.value)}
+            required
+          />
+        </div>
+        
+        <Button type="submit">Create Post</Button>
+      </form>
+
+      <div>
+        <div
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={handleImageDrop}
+          className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center"
+        >
+          <p className="text-gray-500">Drag and drop images here</p>
+          <p className="text-sm text-gray-400 mt-2">Supported formats: JPG, PNG</p>
           
-          <div className="space-y-4">
-            <div className="flex justify-between items-baseline">
-              <div>
-                <p className="text-sm text-gray-500">Current Bid</p>
-                <p className="text-2xl font-bold">${listing.currentBid}</p>
+          <input
+            type="file"
+            id="fileInput"
+            multiple
+            accept="image/jpeg,image/png"
+            className="hidden"
+            onChange={(e) => {
+              const files = Array.from(e.target.files || []);
+              setImages(prev => [...prev, ...files]);
+              
+              files.forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                  setPreviews(prev => [...prev, e.target?.result as string]);
+                };
+                reader.readAsDataURL(file);
+              });
+            }}
+          />
+          
+          <Button 
+            type="button"
+            variant="outline"
+            className="mt-4"
+            onClick={() => document.getElementById('fileInput')?.click()}
+          >
+            Choose Files
+          </Button>
+        </div>
+        
+        {previews.length > 0 && (
+          <div className="mt-4 grid grid-cols-2 gap-4">
+            {previews.map((preview, index) => (
+              <div key={index} className="aspect-square rounded-lg overflow-hidden">
+                <img
+                  src={preview}
+                  alt={`Preview ${index + 1}`}
+                  className="w-full h-full object-cover"
+                />
               </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-500">Time Left</p>
-                <p className="text-lg font-semibold">{listing.timeLeft}</p>
-              </div>
-            </div>
+            ))}
           </div>
-        </CardContent>
-
-        <CardFooter>
-          <Dialog open={isBidding} onOpenChange={setIsBidding}>
-            <DialogTrigger asChild>
-              <Button className="w-full">Place Bid</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Place Your Bid</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleBidSubmit}>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="bid">Your Bid Amount ($)</Label>
-                    <Input
-                      id="bid"
-                      type="number"
-                      step="0.01"
-                      min={listing.currentBid + 0.01}
-                      value={bidAmount}
-                      onChange={(e) => setBidAmount(e.target.value)}
-                      placeholder={`Min bid: $${(listing.currentBid + 0.01).toFixed(2)}`}
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsBidding(false)}>
-                    Cancel
-                  </Button>
-                  <Button type="submit">
-                    Confirm Bid
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </CardFooter>
-      </Card>
+        )}
+      </div>
     </div>
   );
 };
 
-export default ListingPage;
+export default CreatePostPage;
