@@ -1,6 +1,6 @@
 "use client"
-import React, { useState } from 'react';
-import { Menu, X, User, Home, ShoppingBag, Heart, Settings, LogOut } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Menu, X, User, Home, ShoppingBag, Heart, Settings, LogOut, Plus } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -16,15 +16,29 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useRouter } from 'next/navigation';
+import { createClient } from '@/utils/supabase/client';
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [email, setEmail] = useState('');
   const router = useRouter();
+  const supabase = createClient();
+
+  useEffect(() => {
+    const getUserEmail = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (user) {
+        setEmail(user?.email ?? '');
+      }
+    }
+    getUserEmail();
+  }, []);
 
   const menuItems = [
     { icon: Home, label: 'Home', href: '/home' },
     { icon: ShoppingBag, label: 'My Bids', href: '/bids' },
     { icon: Heart, label: 'Watchlist', href: '/watchlist' },
+    { icon: Plus, label: 'Post', href: '/post' },
   ];
 
   const goToProfile = () => {
@@ -82,7 +96,7 @@ const Navbar = () => {
               <DropdownMenuContent align="end" className="w-56">
                 <div className="px-4 py-3">
                   <p className="text-sm">Signed in as</p>
-                  <p className="text-sm font-medium truncate">user@example.com</p>
+                  <p className="text-sm font-medium truncate">{email}</p>
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem>
