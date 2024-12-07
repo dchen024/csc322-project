@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Clock,
   History,
@@ -38,6 +38,10 @@ import {
 } from "@/components/ui/collapsible";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
+
+const supabase = createClient()
 
 // Types
 interface BidHistory {
@@ -63,68 +67,169 @@ interface BidItem {
   reservePrice: number;
 }
 
-const MyBidsPage = () => {
-  // Sample data - replace with your actual data fetching logic
-  const [bidItems, setBidItems] = useState<BidItem[]>([
-    {
-      id: "1",
-      title: "Vintage Rolex Datejust",
-      description: "1985 Rolex Datejust 36mm with jubilee bracelet",
-      imageUrl: "https://www.assayjewelers.com/cdn/shop/files/Vintage-Rolex-Datejust-Ref_-1601-Two-Tone-Watch-With-Jubilee-Bracelet-Watches.jpg?v=1728437001",
-      currentBid: 8500,
-      userHighestBid: 8500,
-      startingPrice: 5000,
-      endTime: "2024-12-20T15:00:00Z",
-      timeLeft: "2d 15h",
-      status: 'active',
-      totalBids: 12,
-      isLeading: true,
-      reservePrice: 7500,
-      bidHistory: [
-        { amount: 8500, date: "2024-11-10T14:00:00Z", wasLeading: true },
-        { amount: 7800, date: "2024-11-09T10:00:00Z", wasLeading: true },
-        { amount: 6500, date: "2024-11-08T09:00:00Z", wasLeading: false }
-      ]
-    },
-    {
-      id: "2",
-      title: "Omega Speedmaster Professional",
-      description: "Moonwatch with box and papers",
-      imageUrl: "https://www.omegawatches.com/media/catalog/product/o/m/omega-speedmaster-moonwatch-professional-co-axial-master-chronometer-chronograph-42-mm-31030425001001-3ccf4a.png?w=2000",
-      currentBid: 6800,
-      userHighestBid: 6500,
-      startingPrice: 4000,
-      endTime: "2024-12-18T10:00:00Z",
-      timeLeft: "15h",
-      status: 'outbid',
-      totalBids: 18,
-      isLeading: false,
-      reservePrice: 5500,
-      bidHistory: [
-        { amount: 6500, date: "2024-11-10T12:00:00Z", wasLeading: false },
-        { amount: 6000, date: "2024-11-09T15:00:00Z", wasLeading: true }
-      ]
-    },
-    {
-      id: "3",
-      title: "Patek Philippe Calatrava",
-      description: "Ref. 5196R-001 Rose Gold",
-      imageUrl: "https://luxurytimenyc.com/cdn/shop/products/patek-philippe-37mm-calatrava-watch-white-dial-5196j-227472_350x.jpg?v=1593415027",
-      currentBid: 25000,
-      userHighestBid: 25000,
-      startingPrice: 20000,
-      endTime: "2024-11-10T18:00:00Z",
-      timeLeft: "Ended",
-      status: 'won',
-      totalBids: 8,
-      isLeading: true,
-      reservePrice: 22000,
-      bidHistory: [
-        { amount: 25000, date: "2024-11-10T17:55:00Z", wasLeading: true },
-        { amount: 23000, date: "2024-11-10T15:00:00Z", wasLeading: true }
-      ]
+interface DatabaseBid {
+  id: string;
+  created_at: string;
+  bid_amount: number;
+  post_id: string;
+  bidder_id: string;
+}
+
+interface DatabasePost {
+  id: string;
+  title: string;
+  description: string;
+  pictures: string;
+  current_bid: number;
+  starting_bid: number;
+  expire: string;
+  status: 'active' | 'completed';
+  highest_bidder: string;
+}
+
+const getUniqueBids = (bids: DatabaseBid[]) => {
+  // Create Map with bid_amount as key to keep only latest bid of each amount
+  const uniqueBidsMap = new Map();
+  
+  bids.forEach(bid => {
+    if (!uniqueBidsMap.has(bid.bid_amount) || 
+        new Date(bid.created_at) > new Date(uniqueBidsMap.get(bid.bid_amount).created_at)) {
+      uniqueBidsMap.set(bid.bid_amount, bid);
     }
-  ]);
+  });
+
+  // Convert map back to array and sort by date
+  return Array.from(uniqueBidsMap.values())
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+};
+
+// Add this helper function
+const getUniqueListings = (bids: any[]) => {
+  // Group bids by post_id
+  const postGroups = bids.reduce((groups: any, bid) => {
+    const postId = bid.post.id;
+    if (!groups[postId] || new Date(bid.created_at) > new Date(groups[postId].created_at)) {
+      groups[postId] = bid;
+    }
+    return groups;
+  }, {});
+
+  // Convert back to array
+  return Object.values(postGroups);
+};
+
+const MyBidsPage = () => {
+  const [bidItems, setBidItems] = useState<BidItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const supabase = createClient();
+  const router = useRouter();
+  const [currentUser, setCurrentUser] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUser(user.id);
+      }
+    };
+    fetchUser();
+  }, []);
+
+  useEffect(() => {
+    const fetchBids = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // Fetch all bids by current user
+      const { data: userBids } = await supabase
+        .from('bids')
+        .select(`
+          *,
+          post:post_id (
+            id,
+            title,
+            description,
+            pictures,
+            current_bid,
+            starting_bid,
+            expire,
+            status,
+            highest_bidder
+          )
+        `)
+        .eq('bidder_id', session.user.id)
+        .order('created_at', { ascending: false });
+
+      // Get unique listings before transformation
+      const uniqueListings = getUniqueListings(userBids || []);
+
+      // Transform unique listings
+      const transformedBids = await Promise.all(uniqueListings.map(async (bid: any) => {
+        const { data: postBids } = await supabase
+          .from('bids')
+          .select('*')
+          .eq('post_id', bid.post.id)
+          .order('created_at', { ascending: false });
+
+        const userHighestBid = Math.max(...(userBids || [])
+          .filter(b => b.post.id === bid.post.id)
+          .map(b => b.bid_amount));
+
+        const isLeading = bid.post.highest_bidder === session.user.id;
+
+        return {
+          id: bid.post.id,
+          title: bid.post.title,
+          description: bid.post.description,
+          imageUrl: JSON.parse(bid.post.pictures)[0] || '',
+          currentBid: bid.post.current_bid,
+          userHighestBid,
+          startingPrice: bid.post.starting_bid,
+          endTime: bid.post.expire,
+          timeLeft: getTimeLeft(bid.post.expire),
+          status: getStatus(bid.post.status, isLeading, bid.post.expire),
+          totalBids: postBids?.length || 0,
+          isLeading,
+          reservePrice: bid.post.starting_bid * 1.5, 
+          bidHistory: getUniqueBids(postBids || []).map(b => ({
+            amount: b.bid_amount,
+            date: b.created_at,
+            wasLeading: b.bidder_id === session.user.id
+          })) || []
+        };
+      }));
+
+      setBidItems(transformedBids);
+      setLoading(false);
+    };
+
+    fetchBids();
+  }, []);
+
+  const getStatus = (postStatus: string, isLeading: boolean, endTime: string): BidItem['status'] => {
+    if (new Date(endTime) < new Date()) {
+      return isLeading ? 'won' : 'ended';
+    }
+    return isLeading ? 'active' : 'outbid';
+  };
+
+  const getTimeLeft = (expireDate: string) => {
+    const now = new Date();
+    const expire = new Date(expireDate);
+    const diff = expire.getTime() - now.getTime();
+
+    if (diff <= 0) return 'Ended';
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+
+    if (days > 0) return `${days}d ${hours}h`;
+    return `${hours}h`;
+  };
+
+  const isAuctionEnded = (expireDate: string) => {
+    return new Date(expireDate).getTime() < new Date().getTime();
+  };
 
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState("timeLeft");
@@ -168,6 +273,10 @@ const MyBidsPage = () => {
           return 0;
       }
     });
+
+  const handleListingClick = (listingId: string) => {
+    router.push(`/post/${listingId}`);
+  };
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-4">
@@ -213,117 +322,135 @@ const MyBidsPage = () => {
         <div className="space-y-4">
           {filteredAndSortedItems.map((item) => (
             <Card key={item.id}>
-              <div className="flex flex-col md:flex-row">
-                <div className="w-full md:w-48 h-48">
-                  <img
-                    src={item.imageUrl}
-                    alt={item.title}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="flex-1 p-4">
-                  <div className="flex flex-col md:flex-row justify-between gap-2">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-semibold">{item.title}</h2>
-                        {getStatusBadge(item.status)}
-                      </div>
-                      <p className="text-sm text-gray-500">{item.description}</p>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      {item.isLeading && (
-                        <Badge variant="outline" className="border-green-500 text-green-500">
-                          <Trophy className="w-3 h-3 mr-1" />
-                          Leading Bid
-                        </Badge>
-                      )}
-                    </div>
+              <div 
+                onClick={() => handleListingClick(item.id)}
+                className="cursor-pointer"
+              >
+                <div className="flex flex-col md:flex-row">
+                  <div className="w-full md:w-48 h-48">
+                    <img
+                      src={item.imageUrl}
+                      alt={item.title}
+                      className="w-full h-full object-cover"
+                    />
                   </div>
-
-                  <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <div className="text-sm text-gray-500">Current Bid</div>
-                      <div className="font-semibold flex items-center">
-                        <DollarSign className="h-4 w-4" />
-                        {item.currentBid.toLocaleString()}
+                  <div className="flex-1 p-4">
+                    <div className="flex flex-col md:flex-row justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h2 className="text-xl font-semibold">{item.title}</h2>
+                          {getStatusBadge(item.status)}
+                        </div>
+                        <p className="text-sm text-gray-500">{item.description}</p>
                       </div>
-                    </div>
-
-                    <div>
-                      <div className="text-sm text-gray-500">Your Highest Bid</div>
-                      <div className="font-semibold flex items-center">
-                        <DollarSign className="h-4 w-4" />
-                        {item.userHighestBid.toLocaleString()}
-                        {item.isLeading ? (
-                          <ArrowUp className="h-4 w-4 text-green-500 ml-1" />
-                        ) : (
-                          <ArrowDown className="h-4 w-4 text-red-500 ml-1" />
+                      <div className="flex items-start gap-2">
+                        {item.isLeading && (
+                          <Badge variant="outline" className="border-green-500 text-green-500">
+                            <Trophy className="w-3 h-3 mr-1" />
+                            Leading Bid
+                          </Badge>
                         )}
                       </div>
                     </div>
 
-                    <div>
-                      <div className="text-sm text-gray-500">Total Bids</div>
-                      <div className="font-semibold">{item.totalBids}</div>
-                    </div>
+                    <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <div className="text-sm text-gray-500">Current Bid</div>
+                        <div className="font-semibold flex items-center">
+                          <DollarSign className="h-4 w-4" />
+                          {item.currentBid.toLocaleString()}
+                        </div>
+                      </div>
 
-                    <div>
-                      <div className="text-sm text-gray-500">Time Left</div>
-                      <div className="font-semibold flex items-center">
-                        <Clock className="h-4 w-4 mr-1" />
-                        {item.timeLeft}
+                      <div>
+                        <div className="text-sm text-gray-500">Your Highest Bid</div>
+                        <div className="font-semibold flex items-center">
+                          <DollarSign className="h-4 w-4" />
+                          {item.userHighestBid.toLocaleString()}
+                          {item.isLeading ? (
+                            <ArrowUp className="h-4 w-4 text-green-500 ml-1" />
+                          ) : (
+                            <ArrowDown className="h-4 w-4 text-red-500 ml-1" />
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="text-sm text-gray-500">Total Bids</div>
+                        <div className="font-semibold">{item.totalBids}</div>
+                      </div>
+
+                      <div>
+                        <div className="text-sm text-gray-500">Time Left</div>
+                        <div className="font-semibold flex items-center">
+                          <Clock className="h-4 w-4 mr-1" />
+                          {item.timeLeft}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="mt-4">
-                    <div className="text-sm text-gray-500 mb-1">Price Progress</div>
-                    <Progress 
-                      value={((item.currentBid - item.startingPrice) / (item.reservePrice - item.startingPrice)) * 100}
-                      className="h-2"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500 mt-1">
-                      <span>Start: ${item.startingPrice.toLocaleString()}</span>
-                      <span>Reserve: ${item.reservePrice.toLocaleString()}</span>
-                    </div>
-                  </div>
-
-                  <Collapsible className="mt-4">
-                    <CollapsibleTrigger className="flex items-center gap-2 text-sm text-gray-500">
-                      <History className="h-4 w-4" />
-                      Bid History
-                      <ChevronDown className="h-4 w-4" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-2">
-                      <div className="space-y-2">
-                        {item.bidHistory.map((bid, index) => (
-                          <div 
-                            key={index}
-                            className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded"
-                          >
-                            <div className="flex items-center gap-2">
-                              <DollarSign className="h-3 w-3" />
-                              {bid.amount.toLocaleString()}
-                              {bid.wasLeading && (
-                                <Badge variant="outline" className="text-xs">Leading</Badge>
-                              )}
-                            </div>
-                            <div className="text-gray-500">
-                              {formatDate(bid.date)}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-
-                  {item.status === 'active' && (
                     <div className="mt-4">
-                      <Button className="w-full md:w-auto">
-                        Place New Bid
-                      </Button>
+                      <div className="text-sm text-gray-500 mb-1">Price Progress</div>
+                      <Progress 
+                        value={((item.currentBid - item.startingPrice) / (item.reservePrice - item.startingPrice)) * 100}
+                        className="h-2"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500 mt-1">
+                        <span>Start: ${item.startingPrice.toLocaleString()}</span>
+                        <span>Reserve: ${item.reservePrice.toLocaleString()}</span>
+                      </div>
                     </div>
-                  )}
+
+                    <Collapsible className="mt-4">
+                      <CollapsibleTrigger className="flex items-center gap-2 text-sm text-gray-500">
+                        <History className="h-4 w-4" />
+                        Bid History
+                        <ChevronDown className="h-4 w-4" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-2">
+                        <div className="space-y-2">
+                          {item.bidHistory.map((bid, index) => (
+                            <div 
+                              key={index}
+                              className="flex items-center justify-between text-sm p-2 bg-gray-50 rounded"
+                            >
+                              <div className="flex items-center gap-2">
+                                <DollarSign className="h-3 w-3" />
+                                {bid.amount.toLocaleString()}
+                                {bid.wasLeading && (
+                                  <Badge variant="outline" className="text-xs">Leading</Badge>
+                                )}
+                              </div>
+                              <div className="text-gray-500">
+                                {formatDate(bid.date)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+
+                    {item.status === 'active' && (
+                      <div className="mt-4">
+                        <Button className="w-full md:w-auto">
+                          Place New Bid
+                        </Button>
+                      </div>
+                    )}
+                    {currentUser && 
+                      item.isLeading && 
+                      isAuctionEnded(item.endTime) && (
+                      <Button 
+                        className="w-full mt-4 bg-green-600 hover:bg-green-700 text-black shadow-lg border-2 border-cool-gray-200"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent navigation to post detail
+                          router.push(`/checkout/${item.id}`);
+                        }}
+                      >
+                        Proceed to Checkout
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             </Card>
