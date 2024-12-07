@@ -14,7 +14,7 @@ BidBay is a modern online auction platform where users can list items for sale a
 - Profile management with ratings
 
 <img src = "public/Screenshot 2024-12-06 at 9.26.49 PM.png
-" alt = "image of login page">
+" alt = "image of login page"/>
 
 ### Auction Management
 - Create and manage auction listings
@@ -22,7 +22,7 @@ BidBay is a modern online auction platform where users can list items for sale a
 - Set starting bids and auction duration
 - Real-time bid updates
 
-<img src = "public/Screenshot 2024-12-06 at 9.28.54 PM.png" alt= "image of posting page>
+<img src = "public/Screenshot 2024-12-06 at 9.28.54 PM.png" alt= "image of posting page"/>
 
 ### Bidding System
 - Real-time bidding
