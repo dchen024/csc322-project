@@ -1,14 +1,9 @@
 "use client"
 
-import React, { useState } from 'react';
-import { 
-  Clock,
-  Heart,
-  ArrowUp,
-  ArrowDown,
-  AlertCircle,
-  DollarSign
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
+import { Clock, Heart, ArrowUp, ArrowDown, AlertCircle, DollarSign } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -16,200 +11,232 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "@/components/ui/alert";
 
-// Types for our items
+
 interface WatchlistItem {
   id: string;
-  title: string;
-  description: string;
-  imageUrl: string;
-  currentBid: number;
-  userBid: number | null;
-  endTime: string;
-  bids: number;
-  isLeading: boolean;
-  timeLeft: string;
+  post: {
+    id: string;
+    title: string;
+    current_bid: number;
+    starting_bid: number;
+    expire: string;
+    status: 'active' | 'completed';
+    description: string;
+    pictures: string;
+  }
 }
 
-const WatchlistPage = () => {
-  // Sample data - replace with your actual data fetching logic
-  const [watchlistItems, setWatchlistItems] = useState<WatchlistItem[]>([
-    {
-      id: "1",
-      title: "Vintage Rolex Submariner",
-      description: "1960s Rolex Submariner in excellent condition",
-      imageUrl: "https://precisionwatches.com/wp-content/uploads/2021/11/Rolex-Submariner-Vintage-5513-Ghost.jpg",
-      currentBid: 15000,
-      userBid: 14500,
-      endTime: "2024-12-20T15:00:00Z",
-      bids: 23,
-      isLeading: false,
-      timeLeft: "2d 15h"
-    },
-    {
-      id: "2",
-      title: "Patek Philippe Nautilus",
-      description: "Brand new Patek Philippe Nautilus 5711",
-      imageUrl: "https://luxurytimenyc.com/cdn/shop/files/patek-philippe-nautilus-platinum-40th-anniversary-57111p-001-876366_530x.webp?v=1715400120",
-      currentBid: 85000,
-      userBid: 85000,
-      endTime: "2024-12-21T18:00:00Z",
-      bids: 15,
-      isLeading: true,
-      timeLeft: "3d 18h"
-    },
-    // Add more items as needed
-  ]);
+interface Bid {
+  created_at: string;
+  bid_amount: number;
+  bidder: {
+    username: string;
+  }
+}
 
-  const [sortBy, setSortBy] = useState("endTime");
+export default function WatchlistPage() {
+  const [watchlistItems, setWatchlistItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [bidHistory, setBidHistory] = useState<any[]>([]);
+  const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const supabase = createClient();
+  const router = useRouter();
 
-  const removeFromWatchlist = (itemId: string) => {
-    setWatchlistItems(items => items.filter(item => item.id !== itemId));
-  };
-
-  const sortItems = (items: WatchlistItem[]) => {
-    return [...items].sort((a, b) => {
-      switch (sortBy) {
-        case "priceAsc":
-          return a.currentBid - b.currentBid;
-        case "priceDesc":
-          return b.currentBid - a.currentBid;
-        case "endTime":
-          return new Date(a.endTime).getTime() - new Date(b.endTime).getTime();
-        default:
-          return 0;
-      }
+  const formatCurrency = (amount: number) => {
+    return (amount / 100).toLocaleString('en-US', {
+      style: 'currency',
+      currency: 'USD'
     });
   };
 
-  const sortedItems = sortItems(watchlistItems);
+  const getTimeLeft = (expireDate: string) => {
+    const now = new Date();
+    const expire = new Date(expireDate);
+    const diff = expire.getTime() - now.getTime();
+  
+    if (diff <= 0) return 'Expired';
+  
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  
+    if (days > 0) return `${days}d ${hours}h left`;
+    if (hours > 0) return `${hours}h ${minutes}m left`;
+    return `${minutes}m left`;
+  };
 
-  if (watchlistItems.length === 0) {
-    return (
-      <div className="max-w-4xl mx-auto p-4 space-y-4">
-        <h1 className="text-2xl font-bold">Your Watchlist</h1>
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>No items in your watchlist</AlertTitle>
-          <AlertDescription>
-            Start adding items to your watchlist to keep track of auctions you're interested in.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  const fetchBidHistory = async (postId: string) => {
+    const { data, error } = await supabase
+      .from('bids')
+      .select(`
+        created_at,
+        bid_amount,
+        bidder:bidder_id(username)
+      `)
+      .eq('post_id', postId)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (data) {
+      setBidHistory(prev => ({
+        ...prev,
+        [postId]: data
+      }));
+    }
+  };
+
+  const formatBidTime = (timestamp: string) => {
+    return new Date(timestamp).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      hour12: true
+    });
+  };
+
+  useEffect(() => {
+    async function fetchWatchlist() {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        const { data, error } = await supabase
+          .from('watchlist')
+          .select(`
+            id,
+            post:post_id (
+              id,
+              title,
+              current_bid,
+              starting_bid,
+              expire,
+              status,
+              description,
+              pictures
+            )
+          `)
+          .eq('user_id', session.user.id);
+
+        if (data) setWatchlistItems(data);
+      }
+      setLoading(false);
+    }
+
+    fetchWatchlist();
+  }, []);
+
+  const handleRemoveFromWatchlist = async (watchlistId: string) => {
+    const { error } = await supabase
+      .from('watchlist')
+      .delete()
+      .eq('id', watchlistId);
+
+    if (!error) {
+      setWatchlistItems(prev => prev.filter(item => item.id !== watchlistId));
+    }
+  };
+
+  if (loading) return <div>Loading...</div>;
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Your Watchlist</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">Sort by:</span>
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Sort by..." />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="endTime">Time Left</SelectItem>
-              <SelectItem value="priceAsc">Price: Low to High</SelectItem>
-              <SelectItem value="priceDesc">Price: High to Low</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      <div className="grid gap-4">
-        {sortedItems.map((item) => (
-          <Card key={item.id} className="overflow-hidden">
-            <div className="flex flex-col md:flex-row">
-              <div className="w-full md:w-48 h-48">
-                <img
-                  src={item.imageUrl}
-                  alt={item.title}
-                  className="w-full h-full object-cover"
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 mt-16">
+      {watchlistItems.map((item) => (
+        <Card key={item.id} className="relative">
+          <div 
+            className="cursor-pointer" 
+            onClick={() => router.push(`/post/${item.post.id}`)}
+          >
+            <CardHeader>
+              <CardTitle>
+                {item.post.title}
+              </CardTitle>
+              <div className="flex justify-between items-center absolute top-4 right-4 gap-2">
+                <span className={`text-sm px-2 py-1 rounded ${
+                  item.post.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {item.post.status}
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm('Remove from watchlist?')) {
+                      handleRemoveFromWatchlist(item.id);
+                    }
+                  }}
+                >
+                  Remove
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {item.post.pictures && JSON.parse(item.post.pictures)[0] && (
+                <img 
+                  src={JSON.parse(item.post.pictures)[0]} 
+                  alt={item.post.title}
+                  className="w-full h-48 object-cover mb-4 rounded"
                 />
-              </div>
-              <div className="flex-1 p-4">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-xl font-semibold">{item.title}</h2>
-                    <p className="text-sm text-gray-500">{item.description}</p>
+              )}
+              <div className="space-y-2">
+                <div className="flex flex-row space-x-4">
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    <span>Starting Bid: {formatCurrency(item.post.starting_bid)}</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeFromWatchlist(item.id)}
-                  >
-                    <Heart className="h-5 w-5 fill-current text-red-500" />
-                  </Button>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <div className="text-sm text-gray-500">Current Bid</div>
-                    <div className="font-semibold flex items-center">
-                      <DollarSign className="h-4 w-4" />
-                      {item.currentBid.toLocaleString()}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-gray-500">Your Bid</div>
-                    <div className="font-semibold flex items-center">
-                      {item.userBid ? (
-                        <>
-                          <DollarSign className="h-4 w-4" />
-                          {item.userBid.toLocaleString()}
-                          {item.isLeading ? (
-                            <ArrowUp className="h-4 w-4 text-green-500 ml-1" />
-                          ) : (
-                            <ArrowDown className="h-4 w-4 text-red-500 ml-1" />
-                          )}
-                        </>
-                      ) : (
-                        "No bid"
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-gray-500">Total Bids</div>
-                    <div className="font-semibold">{item.bids}</div>
-                  </div>
-
-                  <div>
-                    <div className="text-sm text-gray-500">Time Left</div>
-                    <div className="font-semibold flex items-center">
-                      <Clock className="h-4 w-4 mr-1" />
-                      {item.timeLeft}
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <ArrowUp className="h-4 w-4" />
+                    <span>Current Bid: {formatCurrency(item.post.current_bid)}</span>
                   </div>
                 </div>
-
-                <div className="mt-4">
-                  <Button className="w-full md:w-auto">
-                    Place Bid
-                  </Button>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  <span>Time Left: {getTimeLeft(item.post.expire)}</span>
                 </div>
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+              <div className="mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (expandedPost === item.post.id) {
+                      setExpandedPost(null);
+                    } else {
+                      setExpandedPost(item.post.id);
+                      fetchBidHistory(item.post.id);
+                    }
+                  }}
+                >
+                  {expandedPost === item.post.id ? 'Hide Bid History' : 'Show Bid History'}
+                </Button>
+                
+                {expandedPost === item.post.id && (
+                  <div className="mt-2 space-y-2" onClick={e => e.stopPropagation()}>
+                    {bidHistory[item.post.id]?.length ? (
+                      bidHistory[item.post.id].map((bid: Bid, index: number) => (
+                        <div key={index} className="text-sm border-b pb-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-gray-500">
+                              {formatBidTime(bid.created_at)}
+                            </span>
+                            <span className="font-medium">
+                              {formatCurrency(bid.bid_amount)}
+                            </span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-gray-500">No bids yet</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </div>
+        </Card>
+      ))}
     </div>
   );
-};
-
-export default WatchlistPage;
+}
