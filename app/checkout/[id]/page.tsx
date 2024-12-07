@@ -66,54 +66,75 @@ const CheckoutPage = () => {
     tax: 0,
     total: 0
   });
+    const router = useRouter();
+
+  // Add form state management
+  const [formData, setFormData] = useState({
+    email: '',
+    firstName: '',
+    lastName: '',
+    address: '',
+    city: '',
+    state: '',
+    zip: '',
+    phone: '',
+    cardNumber: '',
+    expMonth: '',
+    expYear: '',
+    cvc: ''
+  });
+
+  // Add proper error handling
+  const fetchPost = async () => {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) {
+        setError('Please login to checkout');
+        router.push('/login');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('post')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Post not found');
+
+      // Verify user is highest bidder
+      if (data.highest_bidder !== user?.id) {
+        router.push('/home');
+        return;
+      }
+
+      // Calculate order details
+      const pictures = JSON.parse(data.pictures);
+      const subtotal = data.current_bid / 100;
+      const shipping = +(subtotal * 0.1).toFixed(2);
+      const tax = +(subtotal * 0.08).toFixed(2);
+      const total = +(subtotal + shipping + tax).toFixed(2);
+
+      setPost(data);
+      setOrderDetails({
+        name: data.title,
+        image: pictures[0] || '/placeholder.jpg',
+        subtotal,
+        shipping,
+        tax, 
+        total
+      });
+    } catch (err) {
+      setError('Error loading checkout details');
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Fetch post data
   useEffect(() => {
-    const fetchPost = async () => {
-      try {
-        const {data : {user}, error: userError} = await supabase.auth.getUser();
-
-        if (userError) throw userError;
-
-        const { data, error } = await supabase
-          .from('post')
-          .select('*')
-          .eq('id', id)
-          .single();
-
-        if (error) throw error;
-        const router = useRouter();
-        if (data.highest_bidder !== user?.id) {
-            throw new Error('You are not supposed to be here');
-            router.push('/home');
-            return;
-        }
-
-        if (data) {
-          const pictures = JSON.parse(data.pictures);
-          const subtotal = data.current_bid / 100; // Convert cents to dollars
-          const shipping = subtotal * 0.1;
-          const tax = subtotal * 0.08;
-          const total = subtotal + shipping + tax;
-
-          setPost(data);
-          setOrderDetails({
-            name: data.title,
-            image: pictures[0] || '/placeholder.jpg',
-            subtotal,
-            shipping,
-            tax,
-            total
-          });
-        }
-      } catch (err) {
-        setError('Error loading post details');
-        console.error(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (id) fetchPost();
   }, [id]);
 
@@ -130,14 +151,27 @@ const CheckoutPage = () => {
     }, 2000);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Improve form submission
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate payment processing
-    setTimeout(() => {
+
+    // Basic validation
+    if (!formData.email || !formData.cardNumber) {
+      setError('Please fill all required fields');
       setIsLoading(false);
-      console.log('Processing traditional checkout');
-    }, 2000);
+      return;
+    }
+
+    // Simulate order processing
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      router.push('/order/success');
+    } catch {
+      setError('Order processing failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -220,7 +254,14 @@ const CheckoutPage = () => {
               <h2 className="text-lg font-semibold">Contact Information</h2>
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" required />
+                <Input
+                  id="email"
+                  type="email" 
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  required
+                  disabled={isLoading}
+                />
               </div>
             </div>
 
