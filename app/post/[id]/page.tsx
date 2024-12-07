@@ -10,11 +10,13 @@ import {
   User
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useParams } from 'next/navigation';
+import { table } from 'console';
 
 const supabase = createClient();
 
@@ -29,6 +31,11 @@ interface Post {
   expire: string;
   pictures: string;
   status: 'active' | 'ending-soon' | 'ended';
+  poster: {
+    username: string;
+    rating: number;
+    profile_picture?: string;
+  };
 }
 
 const calculateTimeRemaining = (expireDate: string) => {
@@ -54,6 +61,7 @@ const calculateTimeRemaining = (expireDate: string) => {
 const ListingPage = () => {
   const params = useParams();
   const postId = params.id as string;
+  const [id, setId] = useState('');
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isWatchlisted, setIsWatchlisted] = useState(false);
@@ -67,17 +75,61 @@ const ListingPage = () => {
   useEffect(() => {
     let isMounted = true;
 
+    const fetchUser = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (user && isMounted) {
+        setId(user.id);
+        // Check watchlist status after setting user id
+        const { data: watchlistItem } = await supabase
+          .from('watchlist')
+          .select()
+          .eq('user_id', user.id)
+          .eq('post_id', postId)
+          .maybeSingle();
+        
+        setIsWatchlisted(!!watchlistItem);
+      }
+    };
+
+    fetchUser();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [postId]);
+
+  
+
+  useEffect(() => {
+    let isMounted = true;
+
     const fetchPost = async () => {
       try {
         const { data, error } = await supabase
           .from('post')
-          .select('*')
+          .select(`
+            *,
+            poster:poster_id (
+              username,
+              rating,
+              profile_picture
+            )
+          `)
           .eq('id', postId)
           .single();
 
         if (error) throw error;
         if (isMounted) {
-          setPost(data);
+          // Transform the data to match the Post interface
+          const transformedPost = {
+            ...data,
+            poster: {
+              username: data.poster?.username || 'Unknown',
+              rating: data.poster?.rating || 5,
+              profile_picture: data.poster?.profile_picture
+            }
+          };
+          setPost(transformedPost);
           setLoading(false);
         }
       } catch (error) {
@@ -105,6 +157,26 @@ const ListingPage = () => {
 
   if (loading || !post) return <div>Loading...</div>;
 
+  const RatingStars = ({ rating }: { rating: number }) => {
+    return (
+      <div className="flex items-center gap-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <svg
+            key={star}
+            className={`w-5 h-5 ${
+              star <= rating ? 'text-yellow-400' : 'text-gray-300'
+            }`}
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+        ))}
+        <span className="text-sm text-gray-600 ml-2">({rating.toFixed(1)})</span>
+      </div>
+    );
+  };
+
   const images = JSON.parse(post.pictures) as string[];
 
   const nextImage = () => {
@@ -124,12 +196,23 @@ const ListingPage = () => {
     try {
       const bidInCents = Math.round(parseFloat(bidAmount) * 100);
       
+      console.log(id);
       const { error } = await supabase
         .from('post')
-        .update({ current_bid: bidInCents })
+        .update({ current_bid: bidInCents, highest_bidder: id })
         .eq('id', post?.id);
 
       if (error) throw error;
+
+      const { data: newBid, error: newBiderror } = await supabase.from('bids').insert({
+          post_id: post?.id,
+          bidder_id: id,
+          bid_amount: bidInCents
+        }
+      );
+
+      if (newBiderror) throw newBiderror;
+
 
       // Refresh post data
       const { data } = await supabase
@@ -232,9 +315,13 @@ const ListingPage = () => {
           <div className="flex justify-between items-start">
             <div>
               <CardTitle className="text-2xl mb-2">{post.title}</CardTitle>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <User className="w-4 h-4" />
-                <span>{post.poster_name}</span>
+              <div className="flex items-center gap-2">
+                <Avatar>
+                  <AvatarImage src={post.poster.profile_picture || ''} />
+                  <AvatarFallback>{post.poster.username?.[0]}</AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium">{post.poster.username}</span>
+                <RatingStars rating={post.poster.rating} />
               </div>
             </div>
             <Button
@@ -286,6 +373,7 @@ const ListingPage = () => {
                       type="number"
                       step="0.01"
                       min={(post.current_bid / 100) + 0.01}
+                      required
                       value={bidAmount}
                       onChange={(e) => setBidAmount(e.target.value)}
                       placeholder={`Min bid: $${((post.current_bid / 100) + 0.01).toFixed(2)}`}
