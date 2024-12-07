@@ -31,7 +31,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
 const supabase = createClient();
 
@@ -71,6 +71,10 @@ const CheckoutPage = () => {
   useEffect(() => {
     const fetchPost = async () => {
       try {
+        const {data : {user}, error: userError} = await supabase.auth.getUser();
+
+        if (userError) throw userError;
+
         const { data, error } = await supabase
           .from('post')
           .select('*')
@@ -78,6 +82,12 @@ const CheckoutPage = () => {
           .single();
 
         if (error) throw error;
+        const router = useRouter();
+        if (data.highest_bidder !== user?.id) {
+            throw new Error('You are not supposed to be here');
+            router.push('/home');
+            return;
+        }
 
         if (data) {
           const pictures = JSON.parse(data.pictures);
