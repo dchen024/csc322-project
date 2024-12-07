@@ -1,11 +1,11 @@
-# BidHub - Online Auction Platform
+# BidBay - Online Auction Platform
 CSC 33200 Software Engineering Project - Fall 2023  
 City College of New York
 
 [LOGO PLACEHOLDER]
 
 ## Overview
-BidHub is a modern online auction platform where users can list items for sale and participate in real-time bidding. Built with Next.js and Supabase, it provides a seamless experience for buyers and sellers.
+BidBay is a modern online auction platform where users can list items for sale and participate in real-time bidding. Built with Next.js and Supabase, it provides a seamless experience for buyers and sellers.
 
 ## Features
 
