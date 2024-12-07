@@ -1,5 +1,5 @@
 # BidBay - Online Auction Platform
-CSC 33200 Software Engineering Project - Fall 2023  
+CSC 32200 Software Engineering Project - Fall 2023  
 City College of New York
 
 [LOGO PLACEHOLDER]
@@ -79,5 +79,5 @@ Team Members
 Evan Haque - Frontend Developer
 
 License
-This project is part of the CSC 33200 Software Engineering course and is for educational purposes only. ```
+This project is part of the CSC 32200 Software Engineering course and is for educational purposes only. ```
 
