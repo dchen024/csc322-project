@@ -13,9 +13,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createClient } from '@/utils/supabase/client';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 
+// Add interfaces
 interface Post {
   id: string;
   title: string;
@@ -23,6 +25,30 @@ interface Post {
   expire: string;
   pictures: string;
   created_at: string;
+}
+
+// Update RecentOrder interface
+interface RecentOrder {
+  id: string;
+  created_at: string;
+  buyer: string;
+  seller: string;
+  shipping_address: string;
+  post: {
+    title: string;
+    pictures: string;
+    current_bid: number;
+  };
+}
+
+interface RecentBid {
+  id: string;
+  created_at: string;
+  bid_amount: number;
+  post: {
+    title: string;
+    pictures: string;
+  };
 }
 
 const formatCurrency = (cents: number) => {
@@ -67,18 +93,24 @@ const ProfilePage = () => {
   const [editForm, setEditForm] = useState({ ...userData });
   const [loading, setLoading] = useState(true);
 
+  // Add state
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [recentBids, setRecentBids] = useState<RecentBid[]>([]);
+  const [balance, setBalance] = useState(0);
+
+  // Modify the main useEffect to include all data fetching
   useEffect(() => {
-    const fetchUserAndData = async () => {
+    const fetchAllData = async () => {
       try {
         // Get current user
-        const { data: { user } } = await supabase.auth.getUser();
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (!user) return;
         setUser(user);
 
-        // Get user profile data
-        const { data: userData, error: userError } = await supabase
+        // Get user profile data and balance
+        const { data: userData, error: profileError } = await supabase
           .from('Users')
-          .select('username, email, profile_picture, rating')
+          .select('username, email, profile_picture, rating, balance')
           .eq('id', user.id)
           .single();
 
@@ -96,6 +128,7 @@ const ProfilePage = () => {
             profile_picture: userData.profile_picture || '',
             rating: userData.rating || 5,
           });
+          setBalance(userData.balance || 0);
         }
 
         // Get user's posts
@@ -108,6 +141,58 @@ const ProfilePage = () => {
         if (postsError) throw postsError;
         setPosts(postsData || []);
 
+        // Get recent orders
+        const { data: ordersData, error: ordersError } = await supabase
+          .from('orders')
+          .select(`
+            id,
+            created_at,
+            buyer,
+            seller,
+            shipping_address,
+            post!inner (
+              id,
+              title,
+              pictures,
+              current_bid
+            )
+          `)
+          .eq('buyer', user.id)
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        console.log('User ID:', user.id); // Debug user ID
+        console.log('Orders Error:', ordersError); // Debug any errors
+        console.log('Orders Data:', ordersData); // Debug returned data
+
+        if (ordersError) {
+          console.error('Error fetching orders:', ordersError);
+        } else if (!ordersData) {
+          console.log('No orders found for user');
+        } else {
+          setRecentOrders(ordersData);
+        }
+
+        // Get recent bids
+        const { data: bidsData, error: bidsError } = await supabase
+          .from('bids')
+          .select(`
+            id,
+            created_at,
+            bid_amount,
+            post (
+              title,
+              pictures
+            )
+          `)
+          .eq('bidder_id', user.id)
+          .order('created_at', { ascending: false })
+          .limit(3);
+
+        if (!bidsError && bidsData) {
+          setRecentBids(bidsData);
+        }
+
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -115,7 +200,7 @@ const ProfilePage = () => {
       }
     };
 
-    fetchUserAndData();
+    fetchAllData();
   }, []);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -291,6 +376,115 @@ const ProfilePage = () => {
             </Dialog>
           </div>
         </div>
+      </div>
+
+      {/* Add JSX after profile section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-8">
+        {/* Balance Card */}
+        {/* Balance Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-center">Account Balance</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center p-6">
+          <div className="text-5xl font-bold text-center py-8">
+            ${(balance / 100).toFixed(2)}
+          </div>
+          <div className="w-full space-y-3">
+            <Button 
+              className="w-full"
+              onClick={() => router.push('/reload')}
+            >
+              Reload Balance
+            </Button>
+            <Button 
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push('/reload')}
+            >
+              Withdraw Funds
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+        {/* Update Recent Orders Card JSX */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentOrders.map(order => {
+                const address = JSON.parse(order.shipping_address);
+                return (
+                  <div key={order.id} className="flex items-center gap-4">
+                    <img
+                      src={JSON.parse(order.post.pictures)[0]}
+                      alt={order.post.title}
+                      className="w-12 h-12 rounded-lg object-cover"
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium truncate">{order.post.title}</p>
+                      <p className="text-sm text-gray-500">
+                        {new Date(order.created_at).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {address.city}, {address.state}
+                      </p>
+                    </div>
+                    <p className="font-semibold">
+                      ${(order.post.current_bid / 100).toFixed(2)}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <Button
+              variant="outline"
+              className="w-full mt-4"
+              onClick={() => router.push('/order')}
+            >
+              View All Orders
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Recent Bids Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Bids</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {recentBids.map(bid => (
+                <div key={bid.id} className="flex items-center gap-4">
+                  <img
+                    src={JSON.parse(bid.post.pictures)[0]}
+                    alt={bid.post.title}
+                    className="w-12 h-12 rounded-lg object-cover"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium truncate">{bid.post.title}</p>
+                    <p className="text-sm text-gray-500">
+                      {new Date(bid.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <p className="font-semibold">
+                    ${(bid.bid_amount / 100).toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <Button
+              variant="outline"
+              className="w-full mt-4"
+              onClick={() => router.push('/bids')}
+            >
+              View All Bids
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Posts Section */}
