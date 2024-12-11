@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Edit, X, Camera } from 'lucide-react';
+import { Edit, X, Camera, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,7 @@ import { createClient } from '@/utils/supabase/client';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { User } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 // Add interfaces
 interface Post {
@@ -48,6 +49,21 @@ interface RecentBid {
   post: {
     title: string;
     pictures: string;
+  };
+}
+
+// Update Issue interface
+interface Issue {
+  id: string;
+  created_at: string;
+  comments: string;
+  response: Array<{
+    username: string;
+    message: string;
+    timestamp: string;
+  }> | null;
+  issuer: {
+    username: string;
   };
 }
 
@@ -97,6 +113,8 @@ const ProfilePage = () => {
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [recentBids, setRecentBids] = useState<RecentBid[]>([]);
   const [balance, setBalance] = useState(0);
+  const [userIssues, setUserIssues] = useState<Issue[]>([]);
+  const [newResponses, setNewResponses] = useState<{ [key: string]: string }>({});
 
   // Modify the main useEffect to include all data fetching
   useEffect(() => {
@@ -193,6 +211,26 @@ const ProfilePage = () => {
           setRecentBids(bidsData);
         }
 
+        // Get user's issues
+        const { data: issuesData, error: issuesError } = await supabase
+          .from('issues')
+          .select(`
+            id,
+            created_at,
+            comments,
+            response,
+            issuer
+          `)
+          .or(`issuer.eq.${user.id},issuee.eq.${user.id}`)
+          .order('created_at', { ascending: false });
+
+        if (issuesError) throw issuesError;
+        
+        //console.log post title
+
+        console.log(issuesData);
+        setUserIssues(issuesData || []);
+
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -255,6 +293,38 @@ const ProfilePage = () => {
 
   const handlePostClick = (postId: string) => {
     router.push(`/post/${postId}`);
+  };
+
+  const handleResponseSubmit = async (issueId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const newResponse = {
+        username: userData.username,
+        message: newResponses[issueId],
+        timestamp: new Date().toISOString()
+      };
+
+      const issue = userIssues.find(i => i.id === issueId);
+      const updatedResponses = issue?.response 
+        ? [...issue.response, newResponse] 
+        : [newResponse];
+
+      const { error } = await supabase
+        .from('issues')
+        .update({ 
+          response: updatedResponses 
+        })
+        .eq('id', issueId);
+
+      if (error) throw error;
+
+      // Clear input and refresh issues
+      setNewResponses(prev => ({...prev, [issueId]: ''}));
+    } catch (err) {
+      console.error('Error submitting response:', err);
+    }
   };
 
   if (loading) {
@@ -485,6 +555,40 @@ const ProfilePage = () => {
             </Button>
           </CardContent>
         </Card>
+      </div>
+      {/* Issues Section */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Issues</h2>
+        <div className="space-y-4">
+          {userIssues.map((issue) => (
+        <Card key={issue.id}>
+          <CardHeader>
+            <CardTitle className="text-base font-medium">
+          Issue reported by {issue.issuer.username}
+            </CardTitle>
+            <p className="text-sm text-gray-500">
+          {new Date(issue.created_at).toLocaleDateString()}
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Collapsible>
+          <CollapsibleTrigger className="flex items-center justify-between w-full p-2 hover:bg-gray-50 rounded-lg">
+            <span className="text-sm">View Details</span>
+            <ChevronRight className="w-4 h-4" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="p-2 space-y-4">
+            <p className="text-sm text-gray-600">{issue.comments}</p>
+          </CollapsibleContent>
+            </Collapsible>
+          </CardContent>
+        </Card>
+          ))}
+          {userIssues.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          No issues reported
+        </div>
+          )}
+        </div>
       </div>
 
       {/* Posts Section */}
