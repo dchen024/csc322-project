@@ -142,6 +142,33 @@ const CreatePostPage = () => {
           />
         </div>
 
+        <div className="space-y-2 p-4 bg-gray-50 rounded-lg">
+          <div className="text-sm text-gray-500 mb-2">Earnings Breakdown</div>
+          
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Starting Bid</span>
+              <span>${startingBid || '0.00'}</span>
+            </div>
+            
+            <div className="flex justify-between text-sm text-red-500">
+              <span>Platform Fee (10%)</span>
+              <span>-${((parseFloat(startingBid) || 0) * 0.10).toFixed(2)}</span>
+            </div>
+            
+            <div className="border-t pt-2 mt-2">
+              <div className="flex justify-between font-medium">
+                <span>You'll Receive</span>
+                <span>${((parseFloat(startingBid) || 0) * 0.90).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+        
+          <p className="text-xs text-gray-400 mt-2">
+            *Platform fee will be deducted when the auction ends
+          </p>
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="expireDate">Expiration Date</Label>
           <Input
