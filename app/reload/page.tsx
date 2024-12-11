@@ -90,6 +90,12 @@ const AccountPage = () => {
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 2000));
 
+      // Here you would integrate with real Bitcoin payment gateway
+      if (method === 'bitcoin') {
+        // Generate Bitcoin payment address and amount
+        console.log('Processing Bitcoin payment');
+      }
+
       const { error } = await supabase
         .from('Users')
         .update({ 
@@ -243,6 +249,20 @@ const AccountPage = () => {
                     alt="Google Pay" 
                     className="absolute left-4 h-8 w-8"
                   /> Google Pay
+                  <ChevronDown className="absolute right-4 w-4 h-4" />
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full h-14 relative"
+                  onClick={() => handlePayment('bitcoin')}
+                  disabled={isProcessing}
+                >
+                  <img 
+                    src="https://cdn-icons-png.flaticon.com/512/5968/5968260.png" 
+                    alt="Bitcoin" 
+                    className="absolute left-4 h-8 w-8"
+                  /> Bitcoin
                   <ChevronDown className="absolute right-4 w-4 h-4" />
                 </Button>
               </div>
