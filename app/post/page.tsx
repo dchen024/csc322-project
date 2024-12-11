@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 const supabase = createClient();
 
@@ -17,6 +17,7 @@ const CreatePostPage = () => {
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
+  const router = useRouter()
 
   const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -92,13 +93,13 @@ const CreatePostPage = () => {
       if (error) throw error;
       
       // Reset form
+      router.push(`/post/${data[0].id}`);
       setTitle('');
       setDescription('');
       setStartingBid('');
       setExpireDate('');
       setImages([]);
       setPreviews([]);
-      redirect('/home');
       
     } catch (error) {
       console.error('Error creating post:', error);
