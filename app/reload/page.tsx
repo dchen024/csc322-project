@@ -33,6 +33,16 @@ interface UserData {
   profile_picture: string;
 }
 
+interface WithdrawData {
+  method: 'bank' | 'bitcoin';
+  amount: string;
+  destination: string;
+  bankName?: string;
+  accountName?: string;
+  routingNumber?: string;
+  accountType?: 'checking' | 'savings';
+}
+
 const convertToCents = (amount: string): number => {
   return Math.round(parseFloat(amount) * 100);
 };
@@ -53,6 +63,16 @@ const AccountPage = () => {
     expMonth: '',
     expYear: '',
     cvc: ''
+  });
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawData, setWithdrawData] = useState<WithdrawData>({
+    method: 'bank',
+    amount: '',
+    destination: '',
+    bankName: '',
+    accountName: '',
+    routingNumber: '',
+    accountType: 'checking'
   });
 
   const fetchUser = async () => {
@@ -156,6 +176,50 @@ const AccountPage = () => {
     }
   };
 
+  const handleWithdraw = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing(true);
+    try {
+      const amountInCents = convertToCents(withdrawData.amount);
+      
+      if (isNaN(amountInCents) || amountInCents <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+      
+      if (amountInCents > (user?.balance || 0)) {
+        throw new Error('Insufficient balance');
+      }
+
+      // Simulate processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const { error } = await supabase
+        .from('Users')
+        .update({ 
+          balance: (user?.balance || 0) - amountInCents 
+        })
+        .eq('id', user?.id);
+
+      if (error) throw error;
+      
+      await fetchUser();
+      setIsWithdrawing(false);
+      setWithdrawData({
+        method: 'bank',
+        amount: '',
+        destination: '',
+        bankName: '',
+        accountName: '',
+        routingNumber: '',
+        accountType: 'checking'
+      });
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   useEffect(() => {
     fetchUser();
   }, []);
@@ -195,7 +259,173 @@ const AccountPage = () => {
               <div className="text-3xl font-bold">
                 ${((user.balance || 0) / 100).toFixed(2)}
               </div>
+              <Button
+                variant="outline"
+                className="w-full mt-4"
+                onClick={() => setIsWithdrawing(true)}
+              >
+                Withdraw Funds
+              </Button>
             </div>
+
+            <Dialog open={isWithdrawing} onOpenChange={setIsWithdrawing}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Withdraw Funds</DialogTitle>
+                  <DialogDescription>
+                    Choose your withdrawal method and enter amount
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleWithdraw}>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label>Amount to Withdraw</Label>
+                      <Input
+                        type="number"
+                        placeholder="Enter amount"
+                        value={withdrawData.amount}
+                        onChange={(e) => setWithdrawData({
+                          ...withdrawData,
+                          amount: e.target.value
+                        })}
+                        min="0.01"
+                        step="0.01"
+                        max={((user?.balance || 0) / 100).toString()}
+                        required
+                      />
+                      <p className="text-sm text-gray-500">
+                        Available Balance: ${((user?.balance || 0) / 100).toFixed(2)}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Withdrawal Method</Label>
+                      <Select
+                        value={withdrawData.method}
+                        onValueChange={(value: 'bank' | 'bitcoin') => 
+                          setWithdrawData({...withdrawData, method: value})
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select method" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bank">Bank Transfer</SelectItem>
+                          <SelectItem value="bitcoin">Bitcoin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      {withdrawData.method === 'bank' ? (
+                        <>
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <Label>Bank Name</Label>
+                              <Input
+                                placeholder="Enter bank name"
+                                value={withdrawData.bankName}
+                                onChange={(e) => setWithdrawData({
+                                  ...withdrawData,
+                                  bankName: e.target.value
+                                })}
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Account Holder Name</Label>
+                              <Input
+                                placeholder="Enter account holder name"
+                                value={withdrawData.accountName}
+                                onChange={(e) => setWithdrawData({
+                                  ...withdrawData,
+                                  accountName: e.target.value
+                                })}
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Account Number</Label>
+                              <Input
+                                placeholder="Enter account number"
+                                value={withdrawData.destination}
+                                onChange={(e) => setWithdrawData({
+                                  ...withdrawData,
+                                  destination: e.target.value
+                                })}
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Routing Number</Label>
+                              <Input
+                                placeholder="Enter routing number"
+                                value={withdrawData.routingNumber}
+                                onChange={(e) => setWithdrawData({
+                                  ...withdrawData,
+                                  routingNumber: e.target.value
+                                })}
+                                required
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>Account Type</Label>
+                              <Select
+                                value={withdrawData.accountType}
+                                onValueChange={(value: 'checking' | 'savings') => 
+                                  setWithdrawData({...withdrawData, accountType: value})
+                                }
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select account type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="checking">Checking</SelectItem>
+                                  <SelectItem value="savings">Savings</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="space-y-2">
+                          <Label>Bitcoin Address</Label>
+                          <Input
+                            placeholder="Enter Bitcoin address"
+                            value={withdrawData.destination}
+                            onChange={(e) => setWithdrawData({
+                              ...withdrawData,
+                              destination: e.target.value
+                            })}
+                            required
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <DialogFooter>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setIsWithdrawing(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={isProcessing}
+                    >
+                      {isProcessing ? 'Processing...' : 'Withdraw'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
 
             <div className="space-y-4">
               <h2 className="text-lg font-semibold">Quick Payment</h2>
