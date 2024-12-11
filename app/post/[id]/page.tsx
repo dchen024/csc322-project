@@ -70,6 +70,8 @@ const ListingPage = () => {
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
+  const [userBalance, setUserBalance] = useState(0);
+  const [bidError, setBidError] = useState('');
   console.log(postId);
 
   useEffect(() => {
@@ -79,6 +81,17 @@ const ListingPage = () => {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (user && isMounted) {
         setId(user.id);
+        // Get user balance
+        const { data: userData, error: userError } = await supabase
+          .from('Users')
+          .select('balance')
+          .eq('id', user.id)
+          .single();
+        
+        if (!userError && userData) {
+          setUserBalance(userData.balance);
+        }
+
         // Check watchlist status after setting user id
         const { data: watchlistItem } = await supabase
           .from('watchlist')
@@ -193,33 +206,79 @@ const ListingPage = () => {
     );
   };
 
+  const validateBidAmount = (amount: string): string | null => {
+    const bidInCents = Math.round(parseFloat(amount) * 100);
+    const minBidAmount = Math.max(post?.starting_bid || 0, (post?.current_bid || 0) + 1);
+  
+    if (isNaN(bidInCents)) {
+      return 'Please enter a valid amount';
+    }
+    if (bidInCents <= (post?.current_bid || 0)) {
+      return 'Bid must be higher than current bid';
+    }
+    if (bidInCents > userBalance) {
+      return 'Insufficient balance';
+    }
+    return null;
+  };
+
+  const handleBidChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setBidAmount(value);
+    const error = validateBidAmount(value);
+    setBidError(error || '');
+  };
+
   const handleBidSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBidError('');
+    
+    const validationError = validateBidAmount(bidAmount);
+    if (validationError) {
+      setBidError(validationError);
+      return;
+    }
+  
     try {
       const bidInCents = Math.round(parseFloat(bidAmount) * 100);
       
-      console.log(id);
+      // Update post
       const { error } = await supabase
         .from('post')
-        .update({ current_bid: bidInCents, highest_bidder: id })
+        .update({ 
+          current_bid: bidInCents, 
+          highest_bidder: id 
+        })
         .eq('id', post?.id);
-
+  
       if (error) throw error;
-
-      const { data: newBid, error: newBiderror } = await supabase.from('bids').insert({
-          post_id: post?.id,
-          bidder_id: id,
-          bid_amount: bidInCents
-        }
-      );
-
-      if (newBiderror) throw newBiderror;
+  
+      // Update user balance
+      const { error: balanceError } = await supabase
+        .from('Users')
+        .update({ 
+          balance: userBalance - bidInCents 
+        })
+        .eq('id', id);
+  
+      if (balanceError) throw balanceError;
+  
+      // Record bid
+      const { error: bidError } = await supabase.from('bids').insert({
+        post_id: post?.id,
+        bidder_id: id,
+        bid_amount: bidInCents
+      });
+  
+      if (bidError) throw bidError;
       
-      setPost({...post, current_bid: bidInCents});
+      setPost({...post!, current_bid: bidInCents});
       setIsBidding(false);
       setBidAmount('');
+      setUserBalance(userBalance - bidInCents); // Update local balance
     } catch (error) {
       console.error('Error placing bid:', error);
+      setBidError('Error placing bid. Please try again.');
     }
   };
 
@@ -361,7 +420,12 @@ const ListingPage = () => {
               <form onSubmit={handleBidSubmit}>
                 <div className="space-y-4 py-4">
                   <div className="space-y-2">
-                    <Label htmlFor="bid">Your Bid Amount ($)</Label>
+                    <div className="flex justify-between">
+                      <Label htmlFor="bid">Your Bid Amount ($)</Label>
+                      <span className="text-sm text-gray-500">
+                        Balance: ${(userBalance / 100).toFixed(2)}
+                      </span>
+                    </div>
                     <Input
                       id="bid"
                       type="number"
@@ -369,16 +433,26 @@ const ListingPage = () => {
                       min={(post.current_bid / 100) + 0.01}
                       required
                       value={bidAmount}
-                      onChange={(e) => setBidAmount(e.target.value)}
+                      onChange={handleBidChange}
                       placeholder={`Min bid: $${((post.current_bid / 100) + 0.01).toFixed(2)}`}
                     />
+                    {bidError && (
+                      <p className="text-sm text-red-500 mt-1">{bidError}</p>
+                    )}
                   </div>
                 </div>
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setIsBidding(false)}>
                     Cancel
                   </Button>
-                  <Button type="submit">
+                  <Button 
+                    type="submit"
+                    disabled={
+                      !bidAmount || 
+                      !!validateBidAmount(bidAmount) ||
+                      post.status === 'ended'
+                    }
+                  >
                     Confirm Bid
                   </Button>
                 </DialogFooter>
