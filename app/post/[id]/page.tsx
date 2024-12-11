@@ -118,6 +118,8 @@ const ListingPage = () => {
           .eq('id', postId)
           .single();
 
+          console.log(data)
+
         if (error) throw error;
         if (isMounted) {
           // Transform the data to match the Post interface
@@ -212,16 +214,8 @@ const ListingPage = () => {
       );
 
       if (newBiderror) throw newBiderror;
-
-
-      // Refresh post data
-      const { data } = await supabase
-        .from('post')
-        .select('*')
-        .eq('id', postId)
-        .single();
-
-      if (data) setPost(data);
+      
+      setPost({...post, current_bid: bidInCents});
       setIsBidding(false);
       setBidAmount('');
     } catch (error) {
