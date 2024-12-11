@@ -1,0 +1,350 @@
+"use client"
+
+import React, { useEffect, useState } from 'react';
+import { Loader2, ChevronDown, CreditCard, User, AlertCircle } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { createClient } from '@/utils/supabase/client';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
+const supabase = createClient();
+
+interface UserData {
+  id: string;
+  username: string;
+  email: string;
+  balance: number;
+  profile_picture: string;
+}
+
+const convertToCents = (amount: string): number => {
+  return Math.round(parseFloat(amount) * 100);
+};
+
+const AccountPage = () => {
+  const [user, setUser] = useState<UserData | null>(null);
+  const [amount, setAmount] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+  });
+  const [isAddingCard, setIsAddingCard] = useState(false);
+  const [cardData, setCardData] = useState({
+    cardNumber: '',
+    expMonth: '',
+    expYear: '',
+    cvc: ''
+  });
+
+  const fetchUser = async () => {
+    try {
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+
+      const { data, error } = await supabase
+        .from('Users')
+        .select('*')
+        .eq('id', authUser?.id)
+        .single();
+
+      if (error) throw error;
+      setUser(data);
+      setFormData({
+        username: data.username || '',
+        email: data.email || '',
+      });
+    } catch (err) {
+      setError('Error loading user data');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePayment = async (method: string) => {
+    setIsProcessing(true);
+    try {
+      const amountInCents = convertToCents(amount);
+      if (isNaN(amountInCents) || amountInCents <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+
+      // Simulate payment processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const { error } = await supabase
+        .from('Users')
+        .update({ 
+          balance: (user?.balance || 0) + amountInCents 
+        })
+        .eq('id', user?.id);
+
+      if (error) throw error;
+      
+      await fetchUser();
+      setAmount('');
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCardSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing(true);
+    try {
+      const amountInCents = convertToCents(amount);
+      if (isNaN(amountInCents) || amountInCents <= 0) {
+        throw new Error('Please enter a valid amount');
+      }
+
+      // Validate card details here
+      if (!cardData.cardNumber || !cardData.expMonth || !cardData.expYear || !cardData.cvc) {
+        throw new Error('Please fill in all card details');
+      }
+
+      // Simulate card processing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      const { error } = await supabase
+        .from('Users')
+        .update({ 
+          balance: (user?.balance || 0) + amountInCents 
+        })
+        .eq('id', user?.id);
+
+      if (error) throw error;
+      
+      await fetchUser();
+      setAmount('');
+      setIsAddingCard(false);
+      setCardData({
+        cardNumber: '',
+        expMonth: '',
+        expYear: '',
+        cvc: ''
+      });
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUser();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="w-6 h-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) return <div>User not found</div>;
+
+  return (
+    <div className="max-w-2xl mt-16 mx-auto px-4 py-8">
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Account Balance</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="flex items-center space-x-4">
+              <img
+                src={user.profile_picture || '/default-avatar.png'}
+                alt="Profile"
+                className="w-16 h-16 rounded-full"
+              />
+              <div>
+                <h2 className="text-xl font-semibold">{user.username}</h2>
+                <p className="text-gray-500">{user.email}</p>
+              </div>
+            </div>
+
+            <div className="p-4 bg-gray-50 rounded-lg">
+              <div className="text-sm text-gray-500">Current Balance</div>
+              <div className="text-3xl font-bold">
+                ${((user.balance || 0) / 100).toFixed(2)}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold">Quick Payment</h2>
+              <div className="space-y-3">
+                <Input
+                  type="number"
+                  placeholder="Enter amount to reload"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  disabled={isProcessing}
+                />
+
+                <Button 
+                  variant="outline" 
+                  className="w-full h-14 relative"
+                  onClick={() => handlePayment('paypal')}
+                  disabled={isProcessing}
+                >
+                  <img 
+                    src="https://play-lh.googleusercontent.com/xOKbvDt362x1uzW-nnggP-PgO9HM4L1vwBl5HgHFHy_n1X3mqeBtOSoIyNJzTS3rrj70" 
+                    alt="PayPal" 
+                    className="absolute left-4 h-8 w-8"
+                  /> PayPal
+                  <ChevronDown className="absolute right-4 w-4 h-4" />
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full h-14 relative"
+                  onClick={() => handlePayment('apple')}
+                  disabled={isProcessing}
+                >
+                  <img 
+                    src="https://static-00.iconduck.com/assets.00/apple-pay-icon-2048x1594-cl3st1bm.png" 
+                    alt="Apple Pay" 
+                    className="absolute left-4 h-8 w-10"
+                  /> Apple Pay
+                  <ChevronDown className="absolute right-4 w-4 h-4" />
+                </Button>
+
+                <Button 
+                  variant="outline" 
+                  className="w-full h-14 relative"
+                  onClick={() => handlePayment('google')}
+                  disabled={isProcessing}
+                >
+                  <img 
+                    src="https://cdn-icons-png.flaticon.com/512/6124/6124998.png" 
+                    alt="Google Pay" 
+                    className="absolute left-4 h-8 w-8"
+                  /> Google Pay
+                  <ChevronDown className="absolute right-4 w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <Dialog open={isAddingCard} onOpenChange={setIsAddingCard}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="w-full h-14 relative"
+                  disabled={isProcessing}
+                >
+                  <CreditCard className="absolute left-4 w-6 h-6" />
+                  Add Credit Card
+                  <ChevronDown className="absolute right-4 w-4 h-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add Credit Card</DialogTitle>
+                  <DialogDescription>
+                    Enter your card details to reload your balance
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCardSubmit}>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cardNumber">Card Number</Label>
+                      <Input
+                        id="cardNumber"
+                        placeholder="1234 5678 9012 3456"
+                        value={cardData.cardNumber}
+                        onChange={(e) => setCardData({...cardData, cardNumber: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="expMonth">Month</Label>
+                        <Select onValueChange={(value) => setCardData({...cardData, expMonth: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="MM" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 12 }, (_, i) => (
+                              <SelectItem key={i + 1} value={String(i + 1).padStart(2, '0')}>
+                                {String(i + 1).padStart(2, '0')}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="expYear">Year</Label>
+                        <Select onValueChange={(value) => setCardData({...cardData, expYear: value})}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="YY" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 10 }, (_, i) => (
+                              <SelectItem key={i} value={String(new Date().getFullYear() + i).slice(-2)}>
+                                {String(new Date().getFullYear() + i).slice(-2)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cvc">CVC</Label>
+                        <Input
+                          id="cvc"
+                          maxLength={4}
+                          value={cardData.cvc}
+                          onChange={(e) => setCardData({...cardData, cvc: e.target.value})}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsAddingCard(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={isProcessing}>
+                      {isProcessing ? 'Processing...' : 'Add Card'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            {error && (
+              <div className="flex items-center gap-2 text-red-500 text-sm">
+                <AlertCircle className="w-4 h-4" />
+                {error}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default AccountPage;
