@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
+// Update Post type
 type Post = {
   id: string;
   poster_id: string;
@@ -32,7 +33,7 @@ type Post = {
   expire: string;
   pictures: string;
   description: string;
-  status: 'active' | 'ending-soon' | 'ended';
+  status: 'active' | 'ending-soon' | 'ended' | 'completed';
 }
 
 const supabase = createClient();
@@ -59,6 +60,7 @@ const HomePage = () => {
             profile_picture
           )
         `)
+        .neq('status', 'completed') // Exclude completed posts
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -83,6 +85,7 @@ const HomePage = () => {
     fetchPosts();
   }, []);
 
+  // Update getStatusVariant
   const getStatusVariant = (status: Post['status']) => {
     switch (status) {
       case 'active':
@@ -91,6 +94,8 @@ const HomePage = () => {
         return 'secondary';
       case 'ended':
         return 'destructive';
+      case 'completed':
+        return 'outline';
       default:
         return 'default';
     }

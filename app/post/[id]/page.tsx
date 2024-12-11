@@ -30,7 +30,7 @@ interface Post {
   current_bid: number;
   expire: string;
   pictures: string;
-  status: 'active' | 'ending-soon' | 'ended';
+  status: 'active' | 'ending-soon' | 'ended' | 'completed';
   poster: {
     username: string;
     rating: number;
@@ -59,9 +59,8 @@ const calculateTimeRemaining = (expireDate: string) => {
 };
 
 const ListingPage = () => {
-  const params = useParams();
-  const postId = params.id as string;
-  const [id, setId] = useState('');
+  const { id } = useParams();
+  const [userId, setUserId] = useState('');
 
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isWatchlisted, setIsWatchlisted] = useState(false);
@@ -72,7 +71,7 @@ const ListingPage = () => {
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [userBalance, setUserBalance] = useState(0);
   const [bidError, setBidError] = useState('');
-  console.log(postId);
+  console.log(id);
 
   useEffect(() => {
     let isMounted = true;
@@ -80,7 +79,7 @@ const ListingPage = () => {
     const fetchUser = async () => {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (user && isMounted) {
-        setId(user.id);
+        setUserId(user.id);
         // Get user balance
         const { data: userData, error: userError } = await supabase
           .from('Users')
@@ -97,7 +96,7 @@ const ListingPage = () => {
           .from('watchlist')
           .select()
           .eq('user_id', user.id)
-          .eq('post_id', postId)
+          .eq('post_id', id)
           .maybeSingle();
         
         setIsWatchlisted(!!watchlistItem);
@@ -109,7 +108,7 @@ const ListingPage = () => {
     return () => {
       isMounted = false;
     };
-  }, [postId]);
+  }, [id]);
 
   
 
@@ -128,34 +127,32 @@ const ListingPage = () => {
               profile_picture
             )
           `)
-          .eq('id', postId)
+          .eq('id', id)
           .single();
 
-          console.log(data)
-
         if (error) throw error;
-        if (isMounted) {
-          // Transform the data to match the Post interface
-          const transformedPost = {
-            ...data,
-            poster: {
-              username: data.poster?.username || 'Unknown',
-              rating: data.poster?.rating || 5,
-              profile_picture: data.poster?.profile_picture
-            }
-          };
-          setPost(transformedPost);
-          setLoading(false);
-        }
+        if (!data) throw new Error('Post not found');
+
+        // Transform the data to match the Post interface
+        const transformedPost = {
+          ...data,
+          poster: {
+            username: data.poster?.username || 'Unknown',
+            rating: data.poster?.rating || 5,
+            profile_picture: data.poster?.profile_picture
+          }
+        };
+        setPost(transformedPost);
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching post:', error);
-        if (isMounted) setLoading(false);
+        setLoading(false);
       }
     };
 
     fetchPost();
     return () => { isMounted = false };
-  }, [postId]);
+  }, [id]);
 
     useEffect(() => {
     if (!post?.expire) return;
@@ -247,7 +244,7 @@ const ListingPage = () => {
         .from('post')
         .update({ 
           current_bid: bidInCents, 
-          highest_bidder: id 
+          highest_bidder: userId 
         })
         .eq('id', post?.id);
   
@@ -259,14 +256,14 @@ const ListingPage = () => {
         .update({ 
           balance: userBalance - bidInCents 
         })
-        .eq('id', id);
+        .eq('id', userId);
   
       if (balanceError) throw balanceError;
   
       // Record bid
       const { error: bidError } = await supabase.from('bids').insert({
         post_id: post?.id,
-        bidder_id: id,
+        bidder_id: userId,
         bid_amount: bidInCents
       });
   
@@ -367,7 +364,14 @@ const ListingPage = () => {
         <CardHeader>
           <div className="flex justify-between items-start">
             <div>
-              <CardTitle className="text-2xl mb-2">{post.title}</CardTitle>
+              <div className="flex items-center gap-2 mb-2">
+                <CardTitle className="text-2xl">{post.title}</CardTitle>
+                {(post.status == 'ended' || post.status == 'completed') && (
+                  <span className="px-2 py-1 text-sm bg-gray-100 text-gray-600 rounded">
+                    Completed
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <Avatar>
                   <AvatarImage src={post.poster.profile_picture || ''} />
@@ -380,7 +384,7 @@ const ListingPage = () => {
             <Button
               variant={isWatchlisted ? "secondary" : "outline"}
               size="icon"
-              onClick={() => toggleWatchlist(postId, post.poster_id)}
+              onClick={() => id && toggleWatchlist(id as string, post.poster_id)}
             >
               <Heart className={`w-4 h-4 ${isWatchlisted ? 'fill-current' : ''}`} />
             </Button>
@@ -407,58 +411,64 @@ const ListingPage = () => {
         </CardContent>
 
         <CardFooter>
-          <Dialog open={isBidding} onOpenChange={setIsBidding}>
-            <DialogTrigger asChild>
-              <Button className="w-full" disabled={post.status === 'ended'}>
-                Place Bid
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Place Your Bid</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleBidSubmit}>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <Label htmlFor="bid">Your Bid Amount ($)</Label>
-                      <span className="text-sm text-gray-500">
-                        Balance: ${(userBalance / 100).toFixed(2)}
-                      </span>
+          {post.status === 'completed' ? (
+            <Button className="w-full" disabled>
+              Auction Ended
+            </Button>
+          ) : (
+            <Dialog open={isBidding} onOpenChange={setIsBidding}>
+              <DialogTrigger asChild>
+                <Button className="w-full" disabled={post.status === 'ended'}>
+                  Place Bid
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Place Your Bid</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleBidSubmit}>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <Label htmlFor="bid">Your Bid Amount ($)</Label>
+                        <span className="text-sm text-gray-500">
+                          Balance: ${(userBalance / 100).toFixed(2)}
+                        </span>
+                      </div>
+                      <Input
+                        id="bid"
+                        type="number"
+                        step="0.01"
+                        min={(post.current_bid / 100) + 0.01}
+                        required
+                        value={bidAmount}
+                        onChange={handleBidChange}
+                        placeholder={`Min bid: $${((post.current_bid / 100) + 0.01).toFixed(2)}`}
+                      />
+                      {bidError && (
+                        <p className="text-sm text-red-500 mt-1">{bidError}</p>
+                      )}
                     </div>
-                    <Input
-                      id="bid"
-                      type="number"
-                      step="0.01"
-                      min={(post.current_bid / 100) + 0.01}
-                      required
-                      value={bidAmount}
-                      onChange={handleBidChange}
-                      placeholder={`Min bid: $${((post.current_bid / 100) + 0.01).toFixed(2)}`}
-                    />
-                    {bidError && (
-                      <p className="text-sm text-red-500 mt-1">{bidError}</p>
-                    )}
                   </div>
-                </div>
-                <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsBidding(false)}>
-                    Cancel
-                  </Button>
-                  <Button 
-                    type="submit"
-                    disabled={
-                      !bidAmount || 
-                      !!validateBidAmount(bidAmount) ||
-                      post.status === 'ended'
-                    }
-                  >
-                    Confirm Bid
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsBidding(false)}>
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit"
+                      disabled={
+                        !bidAmount || 
+                        !!validateBidAmount(bidAmount) ||
+                        post.status === 'ended'
+                      }
+                    >
+                      Confirm Bid
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
         </CardFooter>
       </Card>
     </div>

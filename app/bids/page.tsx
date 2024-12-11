@@ -60,7 +60,7 @@ interface BidItem {
   startingPrice: number;
   endTime: string;
   timeLeft: string;
-  status: 'active' | 'won' | 'outbid' | 'ended';
+  status: 'active' | 'won' | 'outbid' | 'ended' | 'completed';
   totalBids: number;
   bidHistory: BidHistory[];
   isLeading: boolean;
@@ -226,6 +226,9 @@ const MyBidsPage = () => {
   }, []);
 
   const getStatus = (postStatus: string, isLeading: boolean, endTime: string): BidItem['status'] => {
+    if (postStatus === 'completed') {
+      return 'completed';
+    }
     if (new Date(endTime) < new Date()) {
       return isLeading ? 'won' : 'ended';
     }
@@ -263,6 +266,8 @@ const MyBidsPage = () => {
         return <Badge className="bg-red-500">Outbid</Badge>;
       case 'ended':
         return <Badge className="bg-gray-500">Ended</Badge>;
+      case 'completed':
+        return <Badge className="bg-gray-500">Completed</Badge>;
     }
   };
 
@@ -479,16 +484,17 @@ const MyBidsPage = () => {
                     )}
                     {currentUser && 
                       item.isLeading && 
-                      isAuctionEnded(item.endTime) && (
-                      <Button 
-                        className="w-full mt-4 bg-green-600 hover:bg-green-700 text-black shadow-lg border-2 border-cool-gray-200"
-                        onClick={(e) => {
-                          e.stopPropagation(); // Prevent navigation to post detail
-                          router.push(`/checkout/${item.id}`);
-                        }}
-                      >
-                        Proceed to Checkout
-                      </Button>
+                      isAuctionEnded(item.endTime) &&
+                      item.status !== 'completed' && ( // Add this condition
+                        <Button 
+                          className="w-full mt-4 bg-green-600 hover:bg-green-700 text-black shadow-lg border-2 border-cool-gray-200"
+                          onClick={(e) => {
+                            e.stopPropagation(); // Prevent navigation to post detail
+                            router.push(`/checkout/${item.id}`);
+                          }}
+                        >
+                          Proceed to Checkout
+                        </Button>
                     )}
                   </div>
                 </div>
