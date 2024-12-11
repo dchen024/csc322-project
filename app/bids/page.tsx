@@ -118,9 +118,18 @@ const getUniqueListings = (bids: any[]) => {
   return Object.values(postGroups);
 };
 
+// Add these helper functions at the top
+const formatCurrency = (cents: number): string => {
+  return `$${(cents / 100).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+};
+
 const MyBidsPage = () => {
   const [bidItems, setBidItems] = useState<BidItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<string | null>(null);
@@ -137,70 +146,80 @@ const MyBidsPage = () => {
 
   useEffect(() => {
     const fetchBids = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      try {
+        setLoading(true);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          setError('Please login to view your bids');
+          return;
+        }
 
-      // Fetch all bids by current user
-      const { data: userBids } = await supabase
-        .from('bids')
-        .select(`
-          *,
-          post:post_id (
-            id,
-            title,
-            description,
-            pictures,
-            current_bid,
-            starting_bid,
-            expire,
-            status,
-            highest_bidder
-          )
-        `)
-        .eq('bidder_id', session.user.id)
-        .order('created_at', { ascending: false });
-
-      // Get unique listings before transformation
-      const uniqueListings = getUniqueListings(userBids || []);
-
-      // Transform unique listings
-      const transformedBids = await Promise.all(uniqueListings.map(async (bid: any) => {
-        const { data: postBids } = await supabase
+        const { data: userBids, error: bidsError } = await supabase
           .from('bids')
-          .select('*')
-          .eq('post_id', bid.post.id)
+          .select(`
+            *,
+            post:post_id (
+              id,
+              title,
+              description,
+              pictures,
+              current_bid,
+              starting_bid,
+              expire,
+              status,
+              highest_bidder
+            )
+          `)
+          .eq('bidder_id', session.user.id)
           .order('created_at', { ascending: false });
 
-        const userHighestBid = Math.max(...(userBids || [])
-          .filter(b => b.post.id === bid.post.id)
-          .map(b => b.bid_amount));
+        if (bidsError) throw bidsError;
 
-        const isLeading = bid.post.highest_bidder === session.user.id;
+        // Get unique listings before transformation
+        const uniqueListings = getUniqueListings(userBids || []);
 
-        return {
-          id: bid.post.id,
-          title: bid.post.title,
-          description: bid.post.description,
-          imageUrl: JSON.parse(bid.post.pictures)[0] || '',
-          currentBid: bid.post.current_bid,
-          userHighestBid,
-          startingPrice: bid.post.starting_bid,
-          endTime: bid.post.expire,
-          timeLeft: getTimeLeft(bid.post.expire),
-          status: getStatus(bid.post.status, isLeading, bid.post.expire),
-          totalBids: postBids?.length || 0,
-          isLeading,
-          reservePrice: bid.post.starting_bid * 1.5, 
-          bidHistory: getUniqueBids(postBids || []).map(b => ({
-            amount: b.bid_amount,
-            date: b.created_at,
-            wasLeading: b.bidder_id === session.user.id
-          })) || []
-        };
-      }));
+        // Transform unique listings
+        const transformedBids = await Promise.all(uniqueListings.map(async (bid: any) => {
+          const { data: postBids } = await supabase
+            .from('bids')
+            .select('*')
+            .eq('post_id', bid.post.id)
+            .order('created_at', { ascending: false });
 
-      setBidItems(transformedBids);
-      setLoading(false);
+          const userHighestBid = Math.max(...(userBids || [])
+            .filter(b => b.post.id === bid.post.id)
+            .map(b => b.bid_amount));
+
+          const isLeading = bid.post.highest_bidder === session.user.id;
+
+          return {
+            id: bid.post.id,
+            title: bid.post.title,
+            description: bid.post.description,
+            imageUrl: JSON.parse(bid.post.pictures)[0] || '',
+            currentBid: bid.post.current_bid,
+            userHighestBid,
+            startingPrice: bid.post.starting_bid,
+            endTime: bid.post.expire,
+            timeLeft: getTimeLeft(bid.post.expire),
+            status: getStatus(bid.post.status, isLeading, bid.post.expire),
+            totalBids: postBids?.length || 0,
+            isLeading,
+            reservePrice: bid.post.starting_bid * 1.5, 
+            bidHistory: getUniqueBids(postBids || []).map(b => ({
+              amount: b.bid_amount,
+              date: b.created_at,
+              wasLeading: b.bidder_id === session.user.id
+            })) || []
+          };
+        }));
+
+        setBidItems(transformedBids);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch bids');
+      } finally {
+        setLoading(false);
+      }
     };
 
     fetchBids();
@@ -256,30 +275,29 @@ const MyBidsPage = () => {
     });
   };
 
+  const sortItems = (a: BidItem, b: BidItem, sortBy: string) => {
+    switch (sortBy) {
+      case 'priceAsc':
+        return a.currentBid - b.currentBid;
+      case 'priceDesc':
+        return b.currentBid - a.currentBid;
+      case 'timeLeft':
+        return new Date(a.endTime).getTime() - new Date(b.endTime).getTime();
+      default:
+        return 0;
+    }
+  };
+
   const filteredAndSortedItems = bidItems
-    .filter(item => {
-      if (filter === 'all') return true;
-      return item.status === filter;
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case 'priceAsc':
-          return a.currentBid - b.currentBid;
-        case 'priceDesc':
-          return b.currentBid - a.currentBid;
-        case 'timeLeft':
-          return new Date(a.endTime).getTime() - new Date(b.endTime).getTime();
-        default:
-          return 0;
-      }
-    });
+    .filter(item => filter === 'all' || item.status === filter)
+    .sort((a, b) => sortItems(a, b, sortBy));
 
   const handleListingClick = (listingId: string) => {
     router.push(`/post/${listingId}`);
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 space-y-4">
+    <div className="max-w-4xl mx-auto mt-16 p-4 space-y-4">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h1 className="text-2xl font-bold">My Bids</h1>
         
@@ -309,6 +327,20 @@ const MyBidsPage = () => {
           </Select>
         </div>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {loading && (
+        <div className="flex justify-center items-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900" />
+        </div>
+      )}
 
       {filteredAndSortedItems.length === 0 ? (
         <Alert>
@@ -358,7 +390,7 @@ const MyBidsPage = () => {
                         <div className="text-sm text-gray-500">Current Bid</div>
                         <div className="font-semibold flex items-center">
                           <DollarSign className="h-4 w-4" />
-                          {item.currentBid.toLocaleString()}
+                          {formatCurrency(item.currentBid)}
                         </div>
                       </div>
 
@@ -366,7 +398,7 @@ const MyBidsPage = () => {
                         <div className="text-sm text-gray-500">Your Highest Bid</div>
                         <div className="font-semibold flex items-center">
                           <DollarSign className="h-4 w-4" />
-                          {item.userHighestBid.toLocaleString()}
+                          {formatCurrency(item.userHighestBid)}
                           {item.isLeading ? (
                             <ArrowUp className="h-4 w-4 text-green-500 ml-1" />
                           ) : (
@@ -396,18 +428,26 @@ const MyBidsPage = () => {
                         className="h-2"
                       />
                       <div className="flex justify-between text-xs text-gray-500 mt-1">
-                        <span>Start: ${item.startingPrice.toLocaleString()}</span>
-                        <span>Reserve: ${item.reservePrice.toLocaleString()}</span>
+                        <span>Start: {formatCurrency(item.startingPrice)}</span>
+                        <span>Reserve: {formatCurrency(item.reservePrice)}</span>
                       </div>
                     </div>
 
                     <Collapsible className="mt-4">
-                      <CollapsibleTrigger className="flex items-center gap-2 text-sm text-gray-500">
+                      <CollapsibleTrigger 
+                        className="flex items-center gap-2 text-sm text-gray-500"
+                        onClick={(e) => {
+                          e.stopPropagation(); // Prevent navigation when clicking bid history
+                        }}
+                      >
                         <History className="h-4 w-4" />
                         Bid History
                         <ChevronDown className="h-4 w-4" />
                       </CollapsibleTrigger>
-                      <CollapsibleContent className="mt-2">
+                      <CollapsibleContent 
+                        className="mt-2"
+                        onClick={(e) => e.stopPropagation()} // Prevent navigation when clicking content
+                      >
                         <div className="space-y-2">
                           {item.bidHistory.map((bid, index) => (
                             <div 
@@ -416,7 +456,7 @@ const MyBidsPage = () => {
                             >
                               <div className="flex items-center gap-2">
                                 <DollarSign className="h-3 w-3" />
-                                {bid.amount.toLocaleString()}
+                                {formatCurrency(bid.amount)}
                                 {bid.wasLeading && (
                                   <Badge variant="outline" className="text-xs">Leading</Badge>
                                 )}
