@@ -199,14 +199,14 @@ const CheckoutPage = () => {
 
       if (orderError) throw orderError;
 
-      /* Update post status to completed
+      // Update post status to completed
       const { error: postError } = await supabase
         .from('post')
         .update({ status: 'completed' })
         .eq('id', post?.id);
 
       if (postError) throw postError;
-      */
+      
 
       // Redirect to rating page with order ID
       router.push(`/rating/${orderData.id}`);
