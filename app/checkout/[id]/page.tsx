@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useParams, useRouter } from 'next/navigation';
 import { createClient } from '@/utils/supabase/client';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 const supabase = createClient();
 
@@ -21,7 +23,28 @@ interface Post {
 interface OrderDetails {
   name: string;
   image: string;
+  subtotal: number;
+  shipping: number;
+  tax: number;
   total: number;
+}
+
+interface ShippingAddress {
+  firstName: string;
+  lastName: string;
+  streetAddress: string;
+  city: string;
+  state: string;
+  zipCode: string;
+}
+
+// Update Order interface
+interface Order {
+  id: string;
+  buyer: string;
+  seller: string;
+  post: string;
+  shipping_address: ShippingAddress;
 }
 
 const CheckoutPage = () => {
@@ -33,7 +56,22 @@ const CheckoutPage = () => {
   const [orderDetails, setOrderDetails] = useState<OrderDetails>({
     name: '',
     image: '',
+    subtotal: 0,
+    shipping: 0,
+    tax: 0,
     total: 0
+  });
+  const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
+    firstName: '',
+    lastName: '',
+    streetAddress: '',
+    city: '',
+    state: '',
+    zipCode: ''
+  });
+  const [sellerInfo, setSellerInfo] = useState({ 
+    username: '', 
+    profile_picture: '' 
   });
   const router = useRouter();
 
@@ -64,6 +102,7 @@ const CheckoutPage = () => {
         .eq('id', id)
         .single();
 
+      console.log(data.poster_id)
       if (error) throw error;
       if (!data) throw new Error('Post not found');
 
@@ -80,11 +119,17 @@ const CheckoutPage = () => {
       }
 
       const pictures = JSON.parse(data.pictures);
+      const subtotal = data.current_bid;
+      const shipping = Math.round(subtotal * 0.10); // 10% shipping
+      const tax = Math.round(subtotal * 0.08875); // 8.875% tax
       setPost(data);
       setOrderDetails({
         name: data.title,
         image: pictures[0] || '/placeholder.jpg',
-        total: data.current_bid
+        subtotal,
+        shipping,
+        tax,
+        total: subtotal + shipping + tax
       });
     } catch (err) {
       setError('Error loading checkout details');
@@ -98,6 +143,26 @@ const CheckoutPage = () => {
     if (id) fetchPost();
   }, [id]);
 
+  useEffect(() => {
+    const fetchSeller = async () => {
+      const { data, error } = await supabase
+        .from('Users')
+        .select('username, profile_picture')
+        .eq('id', post?.poster_id)
+        .single();
+
+      if (!error && data) {
+        setSellerInfo({
+          username: data.username,
+          profile_picture: data.profile_picture || '/default-avatar.png'
+        });
+      }
+    };
+
+    if (post?.poster_id) fetchSeller();
+  }, [post?.poster_id]);
+
+  // Update handlePurchase function
   const handlePurchase = async () => {
     try {
       setIsLoading(true);
@@ -107,7 +172,8 @@ const CheckoutPage = () => {
         return;
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
       
       // Update user balance
       const { error: balanceError } = await supabase
@@ -119,13 +185,41 @@ const CheckoutPage = () => {
 
       if (balanceError) throw balanceError;
 
-      // Redirect to rating page
-      router.push(`/rating/${post?.poster_id}`);
+      // Create order record with shipping address
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          buyer: user?.id,
+          seller: post?.poster_id,
+          post: post?.id,
+          shipping_address: shippingAddress // Add shipping address
+        })
+        .select('id')
+        .single();
+
+      if (orderError) throw orderError;
+
+      /* Update post status to completed
+      const { error: postError } = await supabase
+        .from('post')
+        .update({ status: 'completed' })
+        .eq('id', post?.id);
+
+      if (postError) throw postError;
+      */
+
+      // Redirect to rating page with order ID
+      router.push(`/rating/${orderData.id}`);
     } catch (err) {
       setError('Failed to process purchase');
+      console.error('Purchase error:', err);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const isFormValid = () => {
+    return Object.values(shippingAddress).every(value => value.trim() !== '');
   };
 
   if (isLoading) return <div>Loading...</div>;
@@ -149,7 +243,108 @@ const CheckoutPage = () => {
               <h2 className="text-xl font-semibold">{orderDetails.name}</h2>
               <div className="mt-2 text-sm text-gray-500">Purchase Amount</div>
               <div className="text-2xl font-bold">
-                ${(orderDetails.total / 100).toFixed(2)}
+                ${(orderDetails.subtotal / 100).toFixed(2)}
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="font-semibold">Shipping Address</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="firstName">First Name</Label>
+                <Input
+                  id="firstName"
+                  value={shippingAddress.firstName}
+                  onChange={(e) => setShippingAddress({
+                    ...shippingAddress,
+                    firstName: e.target.value
+                  })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="lastName">Last Name</Label>
+                <Input
+                  id="lastName"
+                  value={shippingAddress.lastName}
+                  onChange={(e) => setShippingAddress({
+                    ...shippingAddress,
+                    lastName: e.target.value
+                  })}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <Label htmlFor="address">Street Address</Label>
+              <Input
+                id="address"
+                value={shippingAddress.streetAddress}
+                onChange={(e) => setShippingAddress({
+                  ...shippingAddress,
+                  streetAddress: e.target.value
+                })}
+                required
+              />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="col-span-2">
+                <Label htmlFor="city">City</Label>
+                <Input
+                  id="city"
+                  value={shippingAddress.city}
+                  onChange={(e) => setShippingAddress({
+                    ...shippingAddress,
+                    city: e.target.value
+                  })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="state">State</Label>
+                <Input
+                  id="state"
+                  value={shippingAddress.state}
+                  onChange={(e) => setShippingAddress({
+                    ...shippingAddress,
+                    state: e.target.value
+                  })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="zipCode">ZIP Code</Label>
+                <Input
+                  id="zipCode"
+                  value={shippingAddress.zipCode}
+                  onChange={(e) => setShippingAddress({
+                    ...shippingAddress,
+                    zipCode: e.target.value
+                  })}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2 p-4 bg-gray-50 rounded-lg">
+            <div className="flex justify-between text-sm">
+              <span>Subtotal</span>
+              <span>${(orderDetails.subtotal / 100).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Shipping</span>
+              <span>${(orderDetails.shipping / 100).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Tax </span>
+              <span>${(orderDetails.tax / 100).toFixed(2)}</span>
+            </div>
+            <div className="border-t pt-2 mt-2">
+              <div className="flex justify-between font-bold">
+                <span>Total</span>
+                <span>${(orderDetails.total / 100).toFixed(2)}</span>
               </div>
             </div>
           </div>
@@ -158,6 +353,23 @@ const CheckoutPage = () => {
             <div className="text-sm text-gray-500">Your Balance</div>
             <div className="text-2xl font-bold">
               ${(userBalance / 100).toFixed(2)}
+            </div>
+          </div>
+
+          <div className="space-y-2 p-4 bg-gray-50 rounded-lg">
+            <div className="flex justify-between text-sm">
+              <span>Current Balance</span>
+              <span>${(userBalance / 100).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-sm text-red-500">
+              <span>Purchase Total</span>
+              <span>-${(orderDetails.total / 100).toFixed(2)}</span>
+            </div>
+            <div className="border-t pt-2 mt-2">
+              <div className="flex justify-between font-bold">
+                <span>Remaining Balance</span>
+                <span>${((userBalance - orderDetails.total) / 100).toFixed(2)}</span>
+              </div>
             </div>
           </div>
 
@@ -174,7 +386,7 @@ const CheckoutPage = () => {
           <Button 
             className="w-full" 
             onClick={handlePurchase}
-            disabled={isLoading || userBalance < orderDetails.total}
+            disabled={isLoading || userBalance < orderDetails.total || !isFormValid()}
           >
             {isLoading ? (
               <span className="flex items-center gap-2">
