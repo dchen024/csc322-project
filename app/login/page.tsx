@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,41 @@ const AuthPage = () => {
     password: '',
     username: '',
   });
+  const [captcha, setCaptcha] = useState({
+    num1: 0,
+    num2: 0,
+    operator: '+',
+    answer: ''
+  });
+
+  const generateCaptcha = () => {
+    const operators = ['+', '-']; // Removed multiplication
+    const num1 = Math.floor(Math.random() * 1001);
+    const num2 = Math.floor(Math.random() * 1001);
+    const operator = operators[Math.floor(Math.random() * operators.length)];
+    
+    setCaptcha(prev => ({
+      ...prev,
+      num1,
+      num2,
+      operator,
+      answer: ''
+    }));
+  };
+
+  useEffect(() => {
+    if (!isLogin) {
+      generateCaptcha();
+    }
+  }, [isLogin]);
+
+  const handleCaptchaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCaptcha(prev => ({
+      ...prev,
+      answer: value
+    }));
+  };
 
   const validateForm = () => {
     let isValid = true;
@@ -47,6 +82,26 @@ const AuthPage = () => {
     if (!isLogin && !formData.username) {
       newErrors.username = 'Username is required';
       isValid = false;
+    }
+
+    if (!isLogin) {
+      let correctAnswer;
+      switch (captcha.operator) {
+        case '+':
+          correctAnswer = captcha.num1 + captcha.num2;
+          break;
+        case '-':
+          correctAnswer = captcha.num1 - captcha.num2;
+          break;
+        default:
+          correctAnswer = 0;
+      }
+
+      if (!captcha.answer || parseInt(captcha.answer) !== correctAnswer) {
+        isValid = false;
+        alert('Please solve the arithmetic challenge correctly');
+        generateCaptcha(); // Generate new challenge after failed attempt
+      }
     }
 
     setErrors(newErrors);
@@ -141,6 +196,34 @@ const AuthPage = () => {
                 <p className="text-sm text-red-500">{errors.password}</p>
               )}
             </div>
+
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="captcha">Verify you're human</Label>
+                <div className="flex items-center space-x-2">
+                  <span className="text-lg font-semibold">
+                    {captcha.num1} {captcha.operator} {captcha.num2} = ?
+                  </span>
+                  <Input
+                    id="captcha"
+                    name="captcha"
+                    type="number"
+                    className="w-24"
+                    value={captcha.answer}
+                    onChange={handleCaptchaChange}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={generateCaptcha}
+                    className="px-2"
+                  >
+                    ↻
+                  </Button>
+                </div>
+              </div>
+            )}
 
             {isLogin && (
               <div className="text-right">
