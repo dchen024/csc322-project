@@ -45,7 +45,7 @@ interface Order {
 }
 
 const RatingPage = () => {
-  const { orderId } = useParams();
+  const { id } = useParams();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -63,7 +63,7 @@ const RatingPage = () => {
       const { data: orderData, error: orderError } = await supabase
         .from('orders')
         .select('*')
-        .eq('id', orderId)
+        .eq('id', id)
         .single();
 
       if (orderError) {
@@ -91,7 +91,7 @@ const RatingPage = () => {
     };
 
     fetchOrder();
-  }, [orderId]);
+  }, [id]);
 
   const updateSellerRating = async () => {
     if (!order) return;
@@ -142,7 +142,7 @@ const RatingPage = () => {
       const reviewData: Review = {
         reviewer: user.id,
         reviewee: order.seller,
-        order_id: orderId as string,
+        order_id: id as string,
         comments: comment || null,
         rate: rating
       };
@@ -154,7 +154,7 @@ const RatingPage = () => {
       if (reviewError) throw reviewError;
 
       await updateSellerRating();
-      router.push(`/order/success/${orderId}`);
+      router.push(`/order/success/${id}`);
     } catch (err) {
       console.error('Submit error:', err);
       setError('Failed to submit review');
