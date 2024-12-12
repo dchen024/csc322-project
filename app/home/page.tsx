@@ -237,7 +237,7 @@ const HomePage = () => {
   }
 
   return (
-    <div className="container mx-auto px-4">
+    <div className="container mx-auto mt-20 px-4">
       {userType === 'visitor' && <UpgradeBanner />}
       <div className="sticky top-16 z-10 bg-background py-4 space-y-4">
         <Input
