@@ -7,7 +7,9 @@ import {
   Star, 
   StarHalf, 
   Heart,
-  User
+  User,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -15,8 +17,10 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useParams, useRouter } from 'next/navigation';
 import { table } from 'console';
+import { formatDistance } from 'date-fns';
 
 const supabase = createClient();
 
@@ -35,6 +39,20 @@ interface Post {
     username: string;
     rating: number;
     profile_picture?: string;
+  };
+  comments: Array<{
+    username: string;
+    comment: string;
+    timestamp: string;
+  }>;
+}
+
+interface Bid {
+  created_at: string;
+  bidder_id: string;
+  bid_amount: number;
+  bidder: {
+    username: string;
   };
 }
 
@@ -73,6 +91,11 @@ const ListingPage = () => {
   const [userBalance, setUserBalance] = useState(0);
   const [bidError, setBidError] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [showComments, setShowComments] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [currentUsername, setCurrentUsername] = useState('');
+  const [showBidHistory, setShowBidHistory] = useState(false);
+  const [bidHistory, setBidHistory] = useState<Bid[]>([]);
   const router = useRouter();
   console.log(id);
 
@@ -169,6 +192,43 @@ const ListingPage = () => {
   
     return () => clearInterval(timer);
   }, [post?.expire]);
+
+  useEffect(() => {
+    const fetchUsername = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('Users')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+        if (data) {
+          setCurrentUsername(data.username);
+        }
+      }
+    };
+    fetchUsername();
+  }, []);
+
+  useEffect(() => {
+    const fetchBidHistory = async () => {
+      const { data: bids, error } = await supabase
+        .from('bids')
+        .select(`
+          created_at,
+          bid_amount,
+          bidder:bidder_id(username)
+        `)
+        .eq('post_id', id)
+        .order('created_at', { ascending: false });
+    
+      if (!error && bids) {
+        setBidHistory(bids);
+      }
+    };
+    
+    fetchBidHistory();
+  }, [id]);
 
   if (loading || !post) return <div>Loading...</div>;
 
@@ -269,6 +329,37 @@ const ListingPage = () => {
       console.error('Error placing bid:', error);
       setBidError('Error placing bid. Please try again.');
     }
+  };
+
+  const handleCommentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim()) return;
+  
+    const comment = {
+      username: currentUsername,
+      comment: newComment.trim(),
+      timestamp: new Date().toISOString()
+    };
+  
+    const updatedComments = [...(post?.comments || []), comment];
+  
+    const { error } = await supabase
+      .from('post')
+      .update({
+        comments: updatedComments
+      })
+      .eq('id', post?.id);
+  
+    if (error) {
+      console.error('Error adding comment:', error);
+      return;
+    }
+  
+    setPost(prev => prev ? {
+      ...prev,
+      comments: updatedComments
+    } : null);
+    setNewComment('');
   };
 
   // Function to toggle watchlist status
@@ -474,6 +565,109 @@ const ListingPage = () => {
           )}
         </CardFooter>
       </Card>
+
+      <div className="space-y-4">
+   
+
+        {/* Bid History Section */}
+        <div className="border-t pt-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">
+              Bid History ({bidHistory.length})
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowBidHistory(!showBidHistory)}
+            >
+              {showBidHistory ? (
+                <ChevronUp className="h-4 w-4 mr-2" />
+              ) : (
+                <ChevronDown className="h-4 w-4 mr-2" />
+              )}
+              {showBidHistory ? 'Hide' : 'Show'} History
+            </Button>
+          </div>
+
+          {showBidHistory && (
+            <div className="space-y-2">
+              {bidHistory.length > 0 ? (
+                bidHistory.map((bid, index) => (
+                  <div key={index} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                    <div>
+                      <span className="text-sm text-gray-500 ml-2">
+                        {formatDistance(new Date(bid.created_at), new Date(), { addSuffix: true })}
+                      </span>
+                    </div>
+                    <span className="font-semibold">
+                      ${(bid.bid_amount / 100).toFixed(2)}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">
+                  No bids yet. Be the first to bid!
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Comments Section */}
+        <div className="border-t pt-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">
+              Comments ({post.comments?.length || 0})
+            </h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowComments(!showComments)}
+            >
+              {showComments ? (
+                <ChevronUp className="h-4 w-4 mr-2" />
+              ) : (
+                <ChevronDown className="h-4 w-4 mr-2" />
+              )}
+              {showComments ? 'Hide' : 'Show'} Comments
+            </Button>
+          </div>
+
+          {showComments && (
+            <div className="space-y-4">
+              {post.comments && post.comments.length > 0 ? (
+                post.comments.map((comment, index) => (
+                  <div key={index} className="bg-gray-50 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-medium">{comment.username}</span>
+                      <span className="text-sm text-gray-500">
+                        {new Date(comment.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-gray-700">{comment.comment}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-gray-500 text-center py-4">
+                  No comments yet. Be the first to comment!
+                </p>
+              )}
+
+              <form onSubmit={handleCommentSubmit} className="space-y-2">
+                <Textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Add a comment..."
+                  required
+                />
+                <Button type="submit" className="w-full">
+                  Post Comment
+                </Button>
+              </form>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
