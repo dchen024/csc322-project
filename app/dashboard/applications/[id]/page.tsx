@@ -47,7 +47,34 @@ export default function ApplicationPage() {
   }>>([]);
   const [showActivity, setShowActivity] = useState(false);
   const [loadingActivity, setLoadingActivity] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
   
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type !== 'super-user') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
+
   async function fetchUserActivity() {
     setLoadingActivity(true);
     const { data: posts, error } = await supabase
@@ -205,6 +232,10 @@ export default function ApplicationPage() {
 
   if (loading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
+  }
+
+  if (!authorized) {
+    return null;
   }
 
   return (

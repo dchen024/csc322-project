@@ -28,7 +28,34 @@ const IssuesPage = () => {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authorized, setAuthorized] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
 
   useEffect(() => {
     const fetchIssues = async () => {
@@ -62,6 +89,10 @@ const IssuesPage = () => {
 
     fetchIssues();
   }, []);
+
+  if (!authorized) {
+    return null;
+  }
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div>{error}</div>;

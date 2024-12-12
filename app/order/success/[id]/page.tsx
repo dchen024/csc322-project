@@ -21,6 +21,33 @@ const OrderSuccessPage = () => {
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -53,6 +80,10 @@ const OrderSuccessPage = () => {
 
     fetchOrder();
   }, [id]);
+
+  if (!authorized) {
+    return null;
+  }
 
   if (isLoading) return (
     <div className="flex justify-center items-center min-h-screen">

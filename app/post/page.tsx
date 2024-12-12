@@ -17,7 +17,34 @@ const CreatePostPage = () => {
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
+  const [authorized, setAuthorized] = useState(false);
   const router = useRouter()
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
 
   const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -105,6 +132,10 @@ const CreatePostPage = () => {
       console.error('Error creating post:', error);
     }
   };
+
+  if (!authorized) {
+    return null;
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8 grid grid-cols-2 gap-8 mt-16">

@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast, toast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 const supabase = createClient();
 
@@ -108,6 +109,35 @@ const AccountPage = () => {
     routingNumber: '',
     accountType: 'checking'
   });
+  const router = useRouter();
+
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
 
   const fetchUser = async () => {
     try {
@@ -290,6 +320,10 @@ const AccountPage = () => {
   useEffect(() => {
     fetchUser();
   }, []);
+
+  if (!authorized) {
+    return null;
+  }
 
   if (isLoading) {
     return (

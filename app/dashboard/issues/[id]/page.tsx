@@ -69,6 +69,35 @@ export default function IssuePage() {
     suspended_times: issue?.order?.seller?.suspended_times || 0
   });
 
+  // Add state for authorization
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+
+      if (userError || userData?.type !== 'super-user') {
+        router.push('/home');
+        return;
+      }
+
+      setAuthorized(true);
+    };
+
+    checkAuthorization();
+  }, []);
+
   useEffect(() => {
     fetchIssueData();
   }, []);
@@ -305,6 +334,11 @@ export default function IssuePage() {
 
   if (loading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
+  }
+
+  // Update return statement to include auth check
+  if (!authorized) {
+    return null;
   }
 
   return (

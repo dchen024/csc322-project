@@ -139,7 +139,36 @@ const ListingPage = () => {
     };
   }, [id]);
 
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
   
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type, balance, suspended')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError) return;
+      
+      if (userData.type === 'visitor') {
+        setError('Visitors cannot place bids. Please upgrade your account.');
+        return;
+      }
+  
+      setUserBalance(userData.balance);
+      if (userData.suspended) {
+        setError('Your account is currently suspended. You cannot place bids.');
+      }
+    };
+  
+    checkAuthorization();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -297,10 +326,10 @@ const ListingPage = () => {
     e.preventDefault();
     setBidError('');
     
-    // Check if user is suspended
+    // Check if user is visitor
     const { data: userData, error: userError } = await supabase
       .from('Users')
-      .select('suspended')
+      .select('type, suspended')
       .eq('id', userId)
       .single();
   
@@ -309,9 +338,15 @@ const ListingPage = () => {
       return;
     }
   
+    if (userData?.type === 'visitor') {
+      setBidError('Visitors cannot place bids. Please upgrade your account.');
+      setIsBidding(false);
+      return;
+    }
+  
     if (userData?.suspended) {
       setBidError('Your account is suspended. You cannot place bids.');
-      setIsBidding(false);
+      setIsBidding(false); 
       return;
     }
   

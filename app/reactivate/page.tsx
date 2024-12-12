@@ -15,6 +15,33 @@ const ReactivatePage = () => {
   const [user, setUser] = useState<any>(null);
   const [balance, setBalance] = useState(0);
   const fineAmount = 5000; // $50 in cents
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
 
   useEffect(() => {
     const checkUserStatus = async () => {
@@ -105,6 +132,9 @@ const ReactivatePage = () => {
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div>{error}</div>;
+  if (!authorized) {
+    return null;
+  }
 
   const remainingBalance = balance - fineAmount;
 

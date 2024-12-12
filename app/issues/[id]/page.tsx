@@ -62,6 +62,33 @@ const IssuePage = () => {
   const [error, setError] = useState<string | null>(null);
   const [newResponse, setNewResponse] = useState<string>('');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
 
   useEffect(() => {
     const fetchIssueDetails = async () => {
@@ -213,6 +240,9 @@ const IssuePage = () => {
   if (loading) return <div>Loading...</div>;
   if (error) return <div>{error}</div>;
   if (!issue) return <div>Issue not found</div>;
+  if (!authorized) {
+    return null;
+  }
 
   const shippingAddress = order ? JSON.parse(order?.shipping_address) : null;
 

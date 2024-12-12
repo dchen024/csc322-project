@@ -21,6 +21,8 @@ import { createClient } from '@/utils/supabase/client';
 const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [email, setEmail] = useState('');
+  const [userType, setUserType] = useState<string>('');
+  const [isSuspended, setIsSuspended] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -34,6 +36,39 @@ const Navbar = () => {
     getUserEmail();
   }, []);
 
+  useEffect(() => {
+    const getUserType = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (user) {
+        const { data: userData } = await supabase
+          .from('Users')
+          .select('type, suspended')
+          .eq('id', user.id)
+          .single();
+        setUserType(userData?.type || '');
+        setIsSuspended(userData?.suspended || false);
+        console.log('User Type:', userData?.type); // Debug
+        console.log('Suspended:', userData?.suspended); // Debug
+      }
+    };
+    getUserType();
+  }, []);
+
+  const hasAccess = (path: string): boolean => {
+    switch (userType) {
+      case 'super-user':
+        return path !== '/user-sign-up';
+      case 'visitor':
+        return !['/bids', '/watchlist', '/reload', '/post', '/dashboard', '/issues'].includes(path);
+      case 'user':
+        return !['/dashboard', '/user-sign-up'].includes(path);
+      case 'vip':
+        return !['/dashboard', '/user-sign-up'].includes(path);
+      default:
+        return false;
+    }
+  };
+
   const menuItems = [
     { icon: Home, label: 'Home', href: '/home' },
     { icon: ShoppingBag, label: 'My Bids', href: '/bids' },
@@ -46,6 +81,12 @@ const Navbar = () => {
     { icon: Users, label: 'Profile', href: '/profile' },
     { icon: UserPlus, label: 'User Sign-up', href: '/user-sign-up' },
     { icon: HelpCircle, label: 'Support', href: '/support' },
+    { 
+      icon: AlertCircle, 
+      label: 'Reactivate Account', 
+      href: '/reactivate',
+      showIf: isSuspended 
+    },
   ];
 
   const goToProfile = () => {
@@ -70,16 +111,23 @@ const Navbar = () => {
                   <SheetTitle>Menu</SheetTitle>
                 </SheetHeader>
                 <div className="mt-6 space-y-4">
-                  {menuItems.map((item) => (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      className="flex items-center px-4 py-2 text-sm rounded-md hover:bg-gray-100"
-                    >
-                      <item.icon className="mr-3 h-5 w-5" />
-                      {item.label}
-                    </a>
-                  ))}
+                  {menuItems
+                    .filter(item => {
+                      // Only show item if user has access AND
+                      // either there's no showIf condition OR the showIf condition is true
+                      return hasAccess(item.href) && 
+                             (!('showIf' in item) || item.showIf === true);
+                    })
+                    .map((item) => (
+                      <a
+                        key={item.label}
+                        href={item.href}
+                        className="flex items-center px-4 py-2 text-sm rounded-md hover:bg-gray-100"
+                      >
+                        <item.icon className="mr-3 h-5 w-5" />
+                        {item.label}
+                      </a>
+                    ))}
                 </div>
               </SheetContent>
             </Sheet>

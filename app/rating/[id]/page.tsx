@@ -55,7 +55,34 @@ const RatingPage = () => {
     profile_picture: undefined 
   });
   const [order, setOrder] = useState<Order | null>(null);
+  const [authorized, setAuthorized] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -201,6 +228,10 @@ const RatingPage = () => {
       setIsLoading(false);
     }
   };
+
+  if (!authorized) {
+    return null;
+  }
 
   if (isLoading) return <div>Loading...</div>;
   if (error) return <div>{error}</div>;

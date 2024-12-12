@@ -36,7 +36,34 @@ const OrdersPage = () => {
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
   const [issueComment, setIssueComment] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
 
   useEffect(() => {
     const fetchOrders = async () => {
@@ -110,6 +137,10 @@ const OrdersPage = () => {
       console.error('Error submitting issue:', err);
     }
   };
+
+  if (!authorized) {
+    return null;
+  }
 
   if (loading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;

@@ -56,6 +56,7 @@ const HomePage = () => {
   const [priceRange, setPriceRange] = useState('all');
   const [timeFilter, setTimeFilter] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+  const [userType, setUserType] = useState<string>('');
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -94,6 +95,20 @@ const HomePage = () => {
     fetchPosts();
   }, []);
   
+  useEffect(() => {
+    const getUserType = async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (user) {
+        const { data: userData } = await supabase
+          .from('Users')
+          .select('type')
+          .eq('id', user.id)
+          .single();
+        setUserType(userData?.type || '');
+      }
+    };
+    getUserType();
+  }, []);
 
   // Add status update logic for "ending-soon"
   const updatePostStatus = (post: Post) => {
@@ -196,12 +211,34 @@ const HomePage = () => {
     });
   };
 
+  const UpgradeBanner = () => (
+    <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-medium text-blue-800">
+            Upgrade to User Account
+          </h3>
+          <p className="text-sm text-blue-600">
+            Get full access to bidding and selling features!
+          </p>
+        </div>
+        <Button 
+          onClick={() => router.push('/user-sign-up')}
+          className="bg-blue-500 hover:bg-blue-600"
+        >
+          Sign Up Now
+        </Button>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return <div>Loading...</div>;
   }
 
   return (
     <div className="container mx-auto px-4">
+      {userType === 'visitor' && <UpgradeBanner />}
       <div className="sticky top-16 z-10 bg-background py-4 space-y-4">
         <Input
           type="text"

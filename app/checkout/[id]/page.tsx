@@ -97,6 +97,13 @@ const CheckoutPage = () => {
       if (balanceError) throw balanceError;
       setUserBalance(userData.balance);
 
+      // Add visitor check here
+      if (userData.type === 'visitor') {
+        router.push('/home');
+        setError('Visitors cannot make purchases. Please upgrade your account.');
+        return;
+      }
+
       if (userData.suspended) {
         setError('Your account is suspended. Please reactivate your account to complete the purchase.');
         return;

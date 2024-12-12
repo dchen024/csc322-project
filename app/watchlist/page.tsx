@@ -40,6 +40,7 @@ export default function WatchlistPage() {
   const [loading, setLoading] = useState(true);
   const [bidHistory, setBidHistory] = useState<any[]>([]);
   const [expandedPost, setExpandedPost] = useState<string | null>(null);
+  const [authorized, setAuthorized] = useState(false);
   const supabase = createClient();
   const router = useRouter();
 
@@ -97,6 +98,32 @@ export default function WatchlistPage() {
   };
 
   useEffect(() => {
+    const checkAuthorization = async () => {
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) {
+        router.push('/home');
+        return;
+      }
+  
+      const { data: userData, error: userError } = await supabase
+        .from('Users')
+        .select('type')
+        .eq('id', user.id)
+        .single();
+  
+      if (userError || userData?.type === 'visitor') {
+        router.push('/home');
+        return;
+      }
+  
+      setAuthorized(true);
+    };
+  
+    checkAuthorization();
+  }, []);
+
+  useEffect(() => {
     async function fetchWatchlist() {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -138,6 +165,10 @@ export default function WatchlistPage() {
   };
 
   if (loading) return <div>Loading...</div>;
+
+  if (!authorized) {
+    return null;
+  }
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4 mt-16">
