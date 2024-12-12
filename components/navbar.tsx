@@ -29,8 +29,9 @@ const Navbar = () => {
   useEffect(() => {
     const getUserEmail = async () => {
       const { data: { user }, error } = await supabase.auth.getUser();
+      console.log('User:', user); // Debug
       if (user) {
-        setEmail(user?.email ?? '');
+        setEmail(user?.email ?? 'Confirm your email');
       }
     }
     getUserEmail();
@@ -92,6 +93,18 @@ const Navbar = () => {
   const goToProfile = () => {
     router.push('/profile');
   }
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (!error) {
+      router.push('/login');
+    }
+  };
+
+  const goHome = () => {
+    router.push('/home');
+  };
+
   return (
     <nav className="w-full bg-white border-b border-gray-200 fixed top-0 z-50">
       <div className="max-w-7xl mx-auto px-4">
@@ -135,7 +148,12 @@ const Navbar = () => {
 
           {/* App Name */}
           <div className="flex-1 flex justify-center">
-            <h1 className="text-xl font-bold text-gray-900">BidBay</h1>
+            <h1 
+              className="text-xl font-bold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors" 
+              onClick={goHome}
+            >
+              BidBay
+            </h1>
           </div>
 
           {/* Profile Menu */}
@@ -161,7 +179,10 @@ const Navbar = () => {
                 </DropdownMenuItem>
             
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">
+                <DropdownMenuItem 
+                  className="text-red-600" 
+                  onClick={handleLogout}
+                >
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Logout</span>
                 </DropdownMenuItem>
