@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState } from 'react';
-import { Loader2, ChevronDown, CreditCard, User, AlertCircle } from 'lucide-react';
+import { Loader2, ChevronDown, CreditCard, User, AlertCircle, AlertTriangle } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -465,17 +465,27 @@ const AccountPage = () => {
                           </div>
                         </>
                       ) : (
-                        <div className="space-y-2">
-                          <Label>Bitcoin Address</Label>
-                          <Input
-                            placeholder="Enter Bitcoin address"
-                            value={withdrawData.destination}
-                            onChange={(e) => setWithdrawData({
-                              ...withdrawData,
-                              destination: e.target.value
-                            })}
-                            required
-                          />
+                        <div className="space-y-4">
+                          <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex gap-3">
+                            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                            <div className="text-sm text-red-700">
+                              <span className="font-semibold block mb-1">Warning: Bitcoin transactions are irreversible</span>
+                              <p>Double-check your Bitcoin address carefully. If you enter the wrong address, your funds cannot be recovered.</p>
+                            </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                            <Label>Bitcoin Address</Label>
+                            <Input
+                              placeholder="Enter Bitcoin address"
+                              value={withdrawData.destination}
+                              onChange={(e) => setWithdrawData({
+                                ...withdrawData,
+                                destination: e.target.value
+                              })}
+                              required
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
