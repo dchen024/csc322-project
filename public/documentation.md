@@ -84,7 +84,6 @@ CREATE TABLE public.post (
 )
 ```
 
-```markdown
 #### Bids
 Tracks all bids made on posts.
 
@@ -190,9 +189,9 @@ CREATE TABLE public.issues (
 - All User privileges
 - 10% transaction discount
 - Suspension immunity (downgrades to User)
-```
 
-```markdown
+
+
 ## Technical Implementation
 
 ### Authentication Flow
@@ -270,9 +269,8 @@ POST /auth/logout
 - Automated backups
 - Transaction logs
 - Recovery procedures
-```
 
-```markdown
+
 ## Deployment Guide
 
 ### Prerequisites
@@ -288,17 +286,15 @@ npm install
 ```
 
 # Set up environment variables
-cp 
 
-.env.example
-
- 
-
-.env.local
-
+```
+NEXT_PUBLIC_SUPABASE_URL=<your-supabase-url>
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+```
 
 
 # Start development server
+```
 npm run dev
 ```
 
@@ -320,7 +316,6 @@ npm run dev
 ```
 
 #### Integration Tests
-- Database migrations
 - Real-time subscriptions
 - Authentication flow
 - Transaction processing
@@ -335,18 +330,16 @@ npm run dev
 #### Production
 1. Main branch merge
 2. Build verification
-3. Database migrations
 4. Production deployment
 
 ### Monitoring & Maintenance
 
 #### Health Checks
-- API endpoint monitoring
 - Database performance
 - Authentication service
 - Real-time connections
 
-#### Backup Strategy
+#### Backup Strategy For The Future
 - Daily database snapshots
 - Transaction logs
 - Media storage backups
@@ -385,7 +378,6 @@ npm run dev
 - Landing page
 - Featured items
 - Category navigation
-- Recent listings
 
 ### /issues
 - `/issues` - Support ticket listing
@@ -415,7 +407,6 @@ npm run dev
 - Rating overview
 
 ### /rating
-- `/rating` - Rating overview
 - `/rating/[id]` - Individual transaction rating
   - Rating submission
   - Feedback form
@@ -432,9 +423,8 @@ npm run dev
 ## Utility Routes
 
 ### /reload
-- Page refresh handler
-- Cache clearing
-- State reset
+- Reload Bid Bay account
+- Withdraw from Bid Bay account
 
 ### /support
 - Help center
@@ -449,18 +439,16 @@ npm run dev
 # Libraries and Dependencies
 
 ## Frontend
-- **Next.js 14** - React framework
+- **Next.js 15** - React framework
 - **Tailwind CSS** - Styling
 - **Shadcn/ui** - UI components
 - **React Hook Form** - Form handling
-- **Zod** - Schema validation
 
 ## Backend & Database
 - **Supabase** 
   - Authentication
   - PostgreSQL database
   - Real-time subscriptions
-- **Prisma** - ORM
 - **PostgreSQL** - Database
 
 ## Utilities
@@ -472,11 +460,7 @@ npm run dev
 
 ## Image Handling
 - **Sharp** - Image optimization
-- **AWS SDK** - S3 storage integration
-
-## State Management
-- **Zustand** - Client state
-- **SWR** - Data fetching/caching
+- **Supabase Bucket storage** - Amazon s3 bucket under the hood
 
 ## Development Tools
 - **Supabase CLI**
