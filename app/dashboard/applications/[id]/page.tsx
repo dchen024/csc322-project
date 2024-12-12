@@ -26,29 +26,30 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 const supabase = createClient();
 
 export default function ApplicationPage() {
-  const params = useParams();
-  const router = useRouter();
-  const { toast } = useToast();
-  const [loading, setLoading] = useState(true);
-  const [application, setApplication] = useState<any>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const params = useParams(); // Get the application ID from the URL parameters
+  const router = useRouter(); // Router instance for navigation
+  const { toast } = useToast(); // Toast instance for displaying notifications
+  const [loading, setLoading] = useState(true); // State to manage loading state
+  const [application, setApplication] = useState<any>(null); // State to store application details
+  const [submitting, setSubmitting] = useState(false); // State to manage submission state
   const [userFormData, setUserFormData] = useState({
     type: '',
     bad_review: 0,
     suspended: false,
     warning: false,
     suspended_times: 0
-  });
+  }); // State to store user form data for editing
   const [recentActivity, setRecentActivity] = useState<Array<{
     postId: string;
     postTitle: string;
     comment: string;
     timestamp: string;
-  }>>([]);
-  const [showActivity, setShowActivity] = useState(false);
-  const [loadingActivity, setLoadingActivity] = useState(false);
-  const [authorized, setAuthorized] = useState(false);
+  }>>([]); // State to store recent activity data
+  const [showActivity, setShowActivity] = useState(false); // State to manage visibility of recent activity
+  const [loadingActivity, setLoadingActivity] = useState(false); // State to manage loading state of recent activity
+  const [authorized, setAuthorized] = useState(false); // State to manage authorization status
 
+  // useEffect to check user authorization when the component mounts
   useEffect(() => {
     const checkAuthorization = async () => {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -75,6 +76,7 @@ export default function ApplicationPage() {
     checkAuthorization();
   }, []);
 
+  // Function to fetch user activity data
   async function fetchUserActivity() {
     setLoadingActivity(true);
     const { data: posts, error } = await supabase
@@ -92,11 +94,7 @@ export default function ApplicationPage() {
       return;
     }
 
-    console.log(posts);
-
     const postsWithComments = posts.filter((post: any) => post.comments.length > 0);
-
-    console.log(postsWithComments);
   
     const allComments = postsWithComments.map((post: any) => {
       return post.comments.map((comment: any) => ({
@@ -107,22 +105,23 @@ export default function ApplicationPage() {
       }));
     }).flat();
 
-    console.log(allComments);
-
-  setRecentActivity(allComments);
-  setLoadingActivity(false);
+    setRecentActivity(allComments);
+    setLoadingActivity(false);
   }
 
+  // useEffect to fetch user activity when the application username changes
   useEffect(() => {
     if (application?.user?.username) {
       fetchUserActivity();
     }
   }, [application?.user?.username]);
 
+  // useEffect to fetch application data when the component mounts
   useEffect(() => {
     fetchApplicationData();
   }, []);
 
+  // Function to fetch application data
   async function fetchApplicationData() {
     const { data, error } = await supabase
       .from('application')
@@ -146,6 +145,7 @@ export default function ApplicationPage() {
     setLoading(false);
   }
 
+  // Function to handle user update
   async function handleUserUpdate(updates: any) {
     setSubmitting(true);
 
@@ -171,6 +171,7 @@ export default function ApplicationPage() {
     setSubmitting(false);
   }
 
+  // Function to handle application update (approve or decline)
   async function handleApplicationUpdate(approve: boolean) {
     if (approve && application.user.type === 'user') {
       toast({

@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label';
 
 const supabase = createClient();
 
+// Interface for Post data
 interface Post {
   id: string;
   title: string;
@@ -20,6 +21,7 @@ interface Post {
   poster_id: string;
 }
 
+// Interface for OrderDetails
 interface OrderDetails {
   name: string;
   image: string;
@@ -30,6 +32,7 @@ interface OrderDetails {
   vip_discount?: number;  // Optional VIP discount amount
 }
 
+// Interface for ShippingAddress
 interface ShippingAddress {
   firstName: string;
   lastName: string;
@@ -39,7 +42,7 @@ interface ShippingAddress {
   zipCode: string;
 }
 
-// Update Order interface
+// Interface for Order
 interface Order {
   id: string;
   buyer: string;
@@ -49,11 +52,11 @@ interface Order {
 }
 
 const CheckoutPage = () => {
-  const { id } = useParams();
-  const [post, setPost] = useState<Post | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [userBalance, setUserBalance] = useState(0);
+  const { id } = useParams(); // Get the post ID from the URL parameters
+  const [post, setPost] = useState<Post | null>(null); // State to store post details
+  const [isLoading, setIsLoading] = useState(true); // State to manage loading state
+  const [error, setError] = useState<string | null>(null); // State to store error messages
+  const [userBalance, setUserBalance] = useState(0); // State to store user balance
   const [orderDetails, setOrderDetails] = useState<OrderDetails>({
     name: '',
     image: '',
@@ -62,7 +65,7 @@ const CheckoutPage = () => {
     tax: 0,
     total: 0,
     vip_discount: 0 // Provide a default value
-  });
+  }); // State to store order details
   const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
     firstName: '',
     lastName: '',
@@ -70,24 +73,26 @@ const CheckoutPage = () => {
     city: '',
     state: '',
     zipCode: ''
-  });
+  }); // State to store shipping address
   const [sellerInfo, setSellerInfo] = useState({ 
     username: '', 
     profile_picture: '' 
-  });
-  const router = useRouter();
+  }); // State to store seller information
+  const router = useRouter(); // Router instance for navigation
 
-  // Updated fetchPost function
+  // Function to fetch post details and user information
   const fetchPost = async () => {
     try {
+      // Fetch the current user from Supabase authentication
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError) {
+        // If there's an error fetching the user, set an error message and redirect to login
         setError('Please login to checkout');
         router.push('/login');
         return;
       }
 
-      // Get user balance and type
+      // Get user balance, suspension status, and type from the 'Users' table
       const { data: userData, error: balanceError } = await supabase
         .from('Users')
         .select('balance, suspended, type')
@@ -97,36 +102,36 @@ const CheckoutPage = () => {
       if (balanceError) throw balanceError;
       setUserBalance(userData.balance);
 
-      // Add visitor check here
+      // Check if the user is a visitor
       if (userData.type === 'visitor') {
         router.push('/home');
         setError('Visitors cannot make purchases. Please upgrade your account.');
         return;
       }
 
+      // Check if the user's account is suspended
       if (userData.suspended) {
         setError('Your account is suspended. Please reactivate your account to complete the purchase.');
         return;
       }
 
-      // Get post details
+      // Get post details from the 'post' table
       const { data, error } = await supabase
         .from('post')
         .select('*')
         .eq('id', id)
         .single();
 
-      console.log(data.poster_id)
       if (error) throw error;
       if (!data) throw new Error('Post not found');
 
-      // Verify user is highest bidder
+      // Verify if the user is the highest bidder
       if (data.highest_bidder !== user?.id) {
         router.push('/home');
         return;
       }
 
-      // Check if post is already completed
+      // Check if the post is already completed
       if (data.status === 'completed') {
         router.push('/home');
         return;
@@ -142,6 +147,7 @@ const CheckoutPage = () => {
       const vip_discount = userData.type === 'vip' ? Math.round(baseTotal * 0.10) : 0;
       const final_total = baseTotal - vip_discount;
 
+      // Set post and order details state
       setPost(data);
       setOrderDetails({
         name: data.title,
@@ -160,10 +166,12 @@ const CheckoutPage = () => {
     }
   };
 
+  // useEffect to fetch post details when the component mounts or the post ID changes
   useEffect(() => {
     if (id) fetchPost();
   }, [id]);
 
+  // useEffect to fetch seller information when the post data changes
   useEffect(() => {
     const fetchSeller = async () => {
       const { data, error } = await supabase
@@ -183,11 +191,12 @@ const CheckoutPage = () => {
     if (post?.poster_id) fetchSeller();
   }, [post?.poster_id]);
 
-  // Updated handlePurchase function
+  // Function to handle the purchase process
   const handlePurchase = async () => {
     try {
       setIsLoading(true);
       
+      // Check if the user has sufficient balance
       if (userBalance < orderDetails.total) {
         setError('Insufficient balance');
         return;
@@ -259,10 +268,12 @@ const CheckoutPage = () => {
     }
   };
 
+  // Function to check if the shipping address form is valid
   const isFormValid = () => {
     return Object.values(shippingAddress).every(value => value.trim() !== '');
   };
 
+  // Render error message if there's an error
   if (error) return (
     <div className="flex justify-center items-center min-h-screen">
       <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
@@ -273,6 +284,7 @@ const CheckoutPage = () => {
     </div>
   );
 
+  // Render loading state
   if (isLoading) return <div>Loading...</div>;
   if (!post) return <div>Post not found</div>;
 

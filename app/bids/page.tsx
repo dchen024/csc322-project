@@ -87,6 +87,7 @@ interface DatabasePost {
   highest_bidder: string;
 }
 
+// Function to get unique bids based on bid amount
 const getUniqueBids = (bids: DatabaseBid[]) => {
   // Create Map with bid_amount as key to keep only latest bid of each amount
   const uniqueBidsMap = new Map();
@@ -103,7 +104,7 @@ const getUniqueBids = (bids: DatabaseBid[]) => {
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 };
 
-// Add this helper function
+// Function to get unique listings based on post_id
 const getUniqueListings = (bids: any[]) => {
   // Group bids by post_id
   const postGroups = bids.reduce((groups: any, bid) => {
@@ -118,7 +119,7 @@ const getUniqueListings = (bids: any[]) => {
   return Object.values(postGroups);
 };
 
-// Add these helper functions at the top
+// Function to format currency from cents to dollars
 const formatCurrency = (cents: number): string => {
   return `$${(cents / 100).toLocaleString(undefined, {
     minimumFractionDigits: 2,
@@ -127,13 +128,18 @@ const formatCurrency = (cents: number): string => {
 };
 
 const MyBidsPage = () => {
+  // State to store bid items
   const [bidItems, setBidItems] = useState<BidItem[]>([]);
+  // State to manage loading state
   const [loading, setLoading] = useState(true);
+  // State to store error messages
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
   const router = useRouter();
+  // State to store current user ID
   const [currentUser, setCurrentUser] = useState<string | null>(null);
 
+  // Fetch user data on component mount
   useEffect(() => {
     const fetchUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -144,6 +150,7 @@ const MyBidsPage = () => {
     fetchUser();
   }, []);
 
+  // Fetch bids data on component mount and when currentUser changes
   useEffect(() => {
     const fetchBids = async () => {
       try {
@@ -223,8 +230,9 @@ const MyBidsPage = () => {
     };
 
     fetchBids();
-  }, []);
+  }, [currentUser]);
 
+  // Function to get the status of a bid item
   const getStatus = (postStatus: string, isLeading: boolean, endTime: string): BidItem['status'] => {
     if (postStatus === 'completed') {
       return 'completed';
@@ -235,6 +243,7 @@ const MyBidsPage = () => {
     return isLeading ? 'active' : 'outbid';
   };
 
+  // Function to get the time left for a bid item
   const getTimeLeft = (expireDate: string) => {
     const now = new Date();
     const expire = new Date(expireDate);
@@ -249,13 +258,17 @@ const MyBidsPage = () => {
     return `${hours}h`;
   };
 
+  // Function to check if an auction has ended
   const isAuctionEnded = (expireDate: string) => {
     return new Date(expireDate).getTime() < new Date().getTime();
   };
 
+  // State to store filter value
   const [filter, setFilter] = useState("all");
+  // State to store sort by value
   const [sortBy, setSortBy] = useState("timeLeft");
 
+  // Function to get the status badge for a bid item
   const getStatusBadge = (status: BidItem['status']) => {
     switch (status) {
       case 'active':
@@ -271,6 +284,7 @@ const MyBidsPage = () => {
     }
   };
 
+  // Function to format date string
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'short',
@@ -280,6 +294,7 @@ const MyBidsPage = () => {
     });
   };
 
+  // Function to sort bid items based on sort by value
   const sortItems = (a: BidItem, b: BidItem, sortBy: string) => {
     switch (sortBy) {
       case 'priceAsc':
@@ -293,10 +308,12 @@ const MyBidsPage = () => {
     }
   };
 
+  // Filter and sort bid items based on filter and sort by values
   const filteredAndSortedItems = bidItems
     .filter(item => filter === 'all' || item.status === filter)
     .sort((a, b) => sortItems(a, b, sortBy));
 
+  // Function to handle listing click
   const handleListingClick = (listingId: string) => {
     router.push(`/post/${listingId}`);
   };
