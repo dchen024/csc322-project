@@ -17,6 +17,9 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
+// Add enum type to match database
+type PostStatus = 'active' | 'ending-soon' | 'ended' | 'completed';
+
 // Update Post type
 type Post = {
   id: string;
@@ -33,10 +36,16 @@ type Post = {
   expire: string;
   pictures: string;
   description: string;
-  status: 'active' | 'ending-soon' | 'ended' | 'completed';
+  status: PostStatus;
 }
 
 const supabase = createClient();
+
+// Use constants for price ranges
+const PRICE_RANGES = {
+  UNDER_100: 10000, // 100 dollars in cents
+  OVER_500: 50000   // 500 dollars in cents
+};
 
 const HomePage = () => {
   const router = useRouter();
@@ -84,6 +93,13 @@ const HomePage = () => {
 
     fetchPosts();
   }, []);
+  
+
+  // Add status update logic for "ending-soon"
+  const updatePostStatus = (post: Post) => {
+    const timeLeft = new Date(post.expire).getTime() - Date.now();
+    return timeLeft < 24 * 60 * 60 * 1000 ? 'ending-soon' : post.status;
+  };
 
   // Update getStatusVariant
   const getStatusVariant = (status: Post['status']) => {
@@ -134,13 +150,13 @@ const HomePage = () => {
     if (priceRange !== 'all') {
       switch(priceRange) {
         case 'under100':
-          filtered = filtered.filter(post => post.current_bid < 10000); // cents
+          filtered = filtered.filter(post => post.current_bid < PRICE_RANGES.UNDER_100); // cents
           break;
         case '100to500':
-          filtered = filtered.filter(post => post.current_bid >= 10000 && post.current_bid <= 50000);
+          filtered = filtered.filter(post => post.current_bid >= 10000 && post.current_bid <= PRICE_RANGES.OVER_500);
           break;
         case 'over500':
-          filtered = filtered.filter(post => post.current_bid > 50000);
+          filtered = filtered.filter(post => post.current_bid > PRICE_RANGES.OVER_500);
           break;
       }
     }

@@ -106,15 +106,18 @@ const ListingPage = () => {
       const { data: { user }, error } = await supabase.auth.getUser();
       if (user && isMounted) {
         setUserId(user.id);
-        // Get user balance
+        // Get user balance and suspension status
         const { data: userData, error: userError } = await supabase
           .from('Users')
-          .select('balance')
+          .select('balance, suspended')
           .eq('id', user.id)
           .single();
         
         if (!userError && userData) {
           setUserBalance(userData.balance);
+          if (userData.suspended) {
+            setError('Your account is currently suspended. You cannot place bids.');
+          }
         }
 
         // Check watchlist status after setting user id
@@ -192,6 +195,7 @@ const ListingPage = () => {
   
     return () => clearInterval(timer);
   }, [post?.expire]);
+
 
   useEffect(() => {
     const fetchUsername = async () => {
@@ -293,6 +297,24 @@ const ListingPage = () => {
     e.preventDefault();
     setBidError('');
     
+    // Check if user is suspended
+    const { data: userData, error: userError } = await supabase
+      .from('Users')
+      .select('suspended')
+      .eq('id', userId)
+      .single();
+  
+    if (userError) {
+      setBidError('Error verifying account status');
+      return;
+    }
+  
+    if (userData?.suspended) {
+      setBidError('Your account is suspended. You cannot place bids.');
+      setIsBidding(false);
+      return;
+    }
+  
     const validationError = validateBidAmount(bidAmount);
     if (validationError) {
       setBidError(validationError);
@@ -512,8 +534,11 @@ const ListingPage = () => {
           ) : (
             <Dialog open={isBidding} onOpenChange={setIsBidding}>
               <DialogTrigger asChild>
-                <Button className="w-full" disabled={post.status === 'ended'}>
-                  Place Bid
+                <Button 
+                  className="w-full" 
+                  disabled={post.status === 'ended' || error !== null}
+                >
+                  {error ? 'Account Suspended' : 'Place Bid'}
                 </Button>
               </DialogTrigger>
               <DialogContent>
