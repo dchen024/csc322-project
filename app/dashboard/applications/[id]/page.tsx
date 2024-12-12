@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { ChevronDown, ChevronUp } from "lucide-react";
 
 const supabase = createClient();
 
@@ -38,6 +39,58 @@ export default function ApplicationPage() {
     warning: false,
     suspended_times: 0
   });
+  const [recentActivity, setRecentActivity] = useState<Array<{
+    postId: string;
+    postTitle: string;
+    comment: string;
+    timestamp: string;
+  }>>([]);
+  const [showActivity, setShowActivity] = useState(false);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  
+  async function fetchUserActivity() {
+    setLoadingActivity(true);
+    const { data: posts, error } = await supabase
+      .from('post')
+      .select(`
+        id,
+        title,
+        comments
+      `)
+      .not('comments', 'is', null);
+  
+    if (error) {
+      console.error('Error fetching activity:', error);
+      setLoadingActivity(false);
+      return;
+    }
+
+    console.log(posts);
+
+    const postsWithComments = posts.filter((post: any) => post.comments.length > 0);
+
+    console.log(postsWithComments);
+  
+    const allComments = postsWithComments.map((post: any) => {
+      return post.comments.map((comment: any) => ({
+        postId: post.id,
+        postTitle: post.title,
+        comment: comment.comment,
+        timestamp: comment.timestamp
+      }));
+    }).flat();
+
+    console.log(allComments);
+
+  setRecentActivity(allComments);
+  setLoadingActivity(false);
+  }
+
+  useEffect(() => {
+    if (application?.user?.username) {
+      fetchUserActivity();
+    }
+  }, [application?.user?.username]);
 
   useEffect(() => {
     fetchApplicationData();
@@ -334,6 +387,62 @@ export default function ApplicationPage() {
             </Dialog>
           </div>
         </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <CardTitle>Recent Activity</CardTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowActivity(!showActivity)}
+            >
+              {showActivity ? (
+                <ChevronUp className="h-4 w-4 mr-2" />
+              ) : (
+                <ChevronDown className="h-4 w-4 mr-2" />
+              )}
+              {showActivity ? 'Hide' : 'Show'} Activity
+            </Button>
+          </div>
+        </CardHeader>
+        {showActivity && (
+          <CardContent>
+            {loadingActivity ? (
+              <div className="text-center py-4">Loading activity...</div>
+            ) : recentActivity.length > 0 ? (
+              <div className="space-y-4">
+                {recentActivity.map((activity, index) => (
+                  <div key={index} className="bg-gray-50 rounded-lg p-3">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="space-y-1">
+                        <p className="text-sm text-gray-500">
+                          Commented on{' '}
+                          <Button
+                            variant="link"
+                            className="p-0 h-auto font-medium"
+                            onClick={() => router.push(`/post/${activity.postId}`)}
+                          >
+                            {activity.postTitle}
+                          </Button>
+                        </p>
+                        <p className="text-gray-700">{activity.comment}</p>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {new Date(activity.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-4">
+                No recent activity found
+              </p>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       {application.status !== 'resolved' && (
