@@ -27,6 +27,7 @@ interface OrderDetails {
   service_fee: number; // Renamed from shipping
   tax: number;
   total: number;
+  vip_discount?: number;  // Optional VIP discount amount
 }
 
 interface ShippingAddress {
@@ -59,7 +60,8 @@ const CheckoutPage = () => {
     subtotal: 0,
     service_fee: 0, // Renamed from shipping
     tax: 0,
-    total: 0
+    total: 0,
+    vip_discount: 0 // Provide a default value
   });
   const [shippingAddress, setShippingAddress] = useState<ShippingAddress>({
     firstName: '',
@@ -85,10 +87,10 @@ const CheckoutPage = () => {
         return;
       }
 
-      // Get user balance
+      // Get user balance and type
       const { data: userData, error: balanceError } = await supabase
         .from('Users')
-        .select('balance, suspended')
+        .select('balance, suspended, type')
         .eq('id', user?.id)
         .single();
 
@@ -127,6 +129,12 @@ const CheckoutPage = () => {
       const subtotal = data.current_bid;
       const service_fee = Math.round(subtotal * 0.05); // 5% service fee
       const tax = Math.round(subtotal * 0.08875); // 8.875% tax
+      const baseTotal = subtotal + service_fee + tax;
+    
+      // Apply VIP discount if applicable
+      const vip_discount = userData.type === 'vip' ? Math.round(baseTotal * 0.10) : 0;
+      const final_total = baseTotal - vip_discount;
+
       setPost(data);
       setOrderDetails({
         name: data.title,
@@ -134,7 +142,8 @@ const CheckoutPage = () => {
         subtotal,
         service_fee, // Updated
         tax,
-        total: subtotal + service_fee + tax // Updated total
+        vip_discount,
+        total: final_total
       });
     } catch (err) {
       setError('Error loading checkout details');
@@ -375,6 +384,12 @@ const CheckoutPage = () => {
               <span>Tax </span>
               <span>${(orderDetails.tax / 100).toFixed(2)}</span>
             </div>
+            {orderDetails.vip_discount && orderDetails.vip_discount > 0 && (
+              <div className="flex justify-between text-sm text-green-600">
+                <span>VIP Discount (10%)</span>
+                <span>-${((orderDetails.vip_discount ?? 0) / 100).toFixed(2)}</span>
+              </div>
+            )}
             <div className="border-t pt-2 mt-2">
               <div className="flex justify-between font-bold">
                 <span>Total</span>

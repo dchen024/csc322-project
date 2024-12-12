@@ -22,6 +22,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast, toast } from '@/hooks/use-toast';
 
 const supabase = createClient();
 
@@ -45,6 +46,39 @@ interface WithdrawData {
 
 const convertToCents = (amount: string): number => {
   return Math.round(parseFloat(amount) * 100);
+};
+
+const checkVIPEligibility = async (userId: string, balance: number) => {
+  // Only check if balance is over $5000
+  if (balance < 500000) return false;
+
+  try {
+    // Check for issues where user is issuee but not issuer
+    const { data: issues, error: issuesError } = await supabase
+      .from('issues')
+      .select('id')
+      .eq('issuee', userId)
+      .not('issuer', 'eq', userId);
+
+    if (issuesError) throw issuesError;
+
+    // If user has any issues against them, they're not eligible
+    if (issues && issues.length > 0) return false;
+
+    // Check order count
+    const { count, error: ordersError } = await supabase
+      .from('orders')
+      .select('id', { count: 'exact' })
+      .eq('buyer', userId);
+
+    if (ordersError) throw ordersError;
+
+    // Must have more than 5 orders
+    return count && count > 5;
+  } catch (error) {
+    console.error('Error checking VIP eligibility:', error);
+    return false;
+  }
 };
 
 const AccountPage = () => {
@@ -107,24 +141,38 @@ const AccountPage = () => {
         throw new Error('Please enter a valid amount');
       }
 
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Calculate new balance
+      const newBalance = (user?.balance || 0) + amountInCents;
 
-      // Here you would integrate with real Bitcoin payment gateway
-      if (method === 'bitcoin') {
-        // Generate Bitcoin payment address and amount
-        console.log('Processing Bitcoin payment');
-      }
-
-      const { error } = await supabase
+      // Update balance
+      const { error: updateError } = await supabase
         .from('Users')
-        .update({ 
-          balance: (user?.balance || 0) + amountInCents 
-        })
+        .update({ balance: newBalance })
         .eq('id', user?.id);
 
-      if (error) throw error;
-      
+      if (updateError) throw updateError;
+
+      // Check VIP eligibility if not already VIP
+      if (user?.type !== 'vip') {
+        const isEligible = await checkVIPEligibility(user?.id!, newBalance);
+        
+        if (isEligible) {
+          // Upgrade to VIP
+          const { error: vipError } = await supabase
+            .from('Users')
+            .update({ type: 'vip' })
+            .eq('id', user?.id);
+
+          if (vipError) throw vipError;
+
+          toast({
+            title: "🎉 Congratulations!",
+            description: "You've been upgraded to VIP status!",
+            duration: 5000,
+          });
+        }
+      }
+
       await fetchUser();
       setAmount('');
     } catch (err: any) {
@@ -151,15 +199,34 @@ const AccountPage = () => {
       // Simulate card processing
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      const { error } = await supabase
+      const newBalance = (user?.balance || 0) + amountInCents;
+
+      const { error: updateError } = await supabase
         .from('Users')
-        .update({ 
-          balance: (user?.balance || 0) + amountInCents 
-        })
+        .update({ balance: newBalance })
         .eq('id', user?.id);
 
-      if (error) throw error;
-      
+      if (updateError) throw updateError;
+
+      if (user?.type !== 'vip') {
+        const isEligible = await checkVIPEligibility(user?.id!, newBalance);
+        
+        if (isEligible) {
+          const { error: vipError } = await supabase
+            .from('Users')
+            .update({ type: 'vip' })
+            .eq('id', user?.id);
+
+          if (vipError) throw vipError;
+
+          toast({
+            title: "🎉 Congratulations!",
+            description: "You've been upgraded to VIP status!",
+            duration: 5000,
+          });
+        }
+      }
+
       await fetchUser();
       setAmount('');
       setIsAddingCard(false);
@@ -604,3 +671,4 @@ const AccountPage = () => {
 };
 
 export default AccountPage;
+
