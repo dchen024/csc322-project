@@ -65,6 +65,7 @@ interface Issue {
   issuer: {
     username: string;
   };
+  status: string; // Add this line
 }
 
 const formatCurrency = (cents: number) => {
@@ -103,6 +104,10 @@ const ProfilePage = () => {
     email: '',
     profile_picture: '',
     rating: 5, // Default rating
+    type: '', // Add this line
+    bad_reviews: 0, // Add this line
+    warning: false, // Add this line
+    suspended: false // Add this line
   });
   const [posts, setPosts] = useState<Post[]>([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -110,10 +115,10 @@ const ProfilePage = () => {
   const [loading, setLoading] = useState(true);
 
   // Add state
-  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
-  const [recentBids, setRecentBids] = useState<RecentBid[]>([]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
+  const [recentBids, setRecentBids] = useState<any[]>([]);
   const [balance, setBalance] = useState(0);
-  const [userIssues, setUserIssues] = useState<Issue[]>([]);
+  const [userIssues, setUserIssues] = useState<any[]>([]);
   const [newResponses, setNewResponses] = useState<{ [key: string]: string }>({});
 
   // Modify the main useEffect to include all data fetching
@@ -128,10 +133,11 @@ const ProfilePage = () => {
         // Get user profile data and balance
         const { data: userData, error: profileError } = await supabase
           .from('Users')
-          .select('username, email, profile_picture, rating, balance')
+          .select('*') // Add type, bad_reviews, and warning
           .eq('id', user.id)
           .single();
 
+        console.log(userData)
         if (userError) throw userError;
         if (userData) {
           setUserData({
@@ -139,12 +145,20 @@ const ProfilePage = () => {
             email: userData.email || '',
             profile_picture: userData.profile_picture || '',
             rating: userData.rating || 5,
+            type: userData.type || '', // Add this line
+            bad_reviews: userData.bad_reviews || 0, // Add this line
+            warning: userData.warning || false, // Add this line
+            suspended: userData.suspended || false // Add this line
           });
           setEditForm({
             username: userData.username || '',
             email: userData.email || '',
             profile_picture: userData.profile_picture || '',
             rating: userData.rating || 5,
+            type: userData.type || '', // Add this line
+            bad_reviews: userData.bad_reviews || 0, // Add this line
+            warning: userData.warning || false, // Add this line
+            suspended: userData.suspended || false // Add this line
           });
           setBalance(userData.balance || 0);
         }
@@ -219,14 +233,13 @@ const ProfilePage = () => {
             created_at,
             comments,
             response,
-            issuer
+            issuer:issuer ( username ),
+            status
           `)
           .or(`issuer.eq.${user.id},issuee.eq.${user.id}`)
           .order('created_at', { ascending: false });
 
         if (issuesError) throw issuesError;
-        
-        //console.log post title
 
         console.log(issuesData);
         setUserIssues(issuesData || []);
@@ -327,6 +340,45 @@ const ProfilePage = () => {
     }
   };
 
+  // Add this function to handle status color coding
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'initiated':
+        return 'bg-red-500';
+      case 'under-review':
+        return 'bg-yellow-500';
+      case 'resolved':
+        return 'bg-green-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
+  const handleAcknowledgeWarning = async () => {
+    if (!user) return;
+  
+    try {
+      const { error } = await supabase
+        .from('Users')
+        .update({ warning: false })
+        .eq('id', user.id);
+  
+      if (error) throw error;
+  
+      setUserData(prev => ({ ...prev, warning: false }));
+    } catch (error) {
+      console.error('Error acknowledging warning:', error);
+    }
+  };
+
+  const handlePayFine = async () => {
+    router.push('/reactivate');
+  };
+
+  const handleContactSupport = () => {
+    router.push('/support');
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center min-h-screen">Loading...</div>;
   }
@@ -335,6 +387,21 @@ const ProfilePage = () => {
     <div className="max-w-7xl mx-auto mt-8 px-4 py-8">
       {/* Profile Section */}
       <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+      {userData.warning && ( // Add this block
+              <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700  p-4 mb-4">
+                <p className="font-bold">Warning</p>
+                <p>A user has given you a rating less than 2. You have {2 - userData.bad_reviews} bad review(s) left before your account is suspended.</p>
+                <Button onClick={handleAcknowledgeWarning} className="mt-2">Acknowledge</Button>
+              </div>
+            )}
+        {userData.suspended && ( // Add this block
+          <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
+            <p className="font-bold">Account Suspended</p>
+            <p>Your account has been suspended. You can pay a $50 fine to continue using the app, contact support, and if you do nothing within 1 month, your account will be disabled.</p>
+            <Button onClick={handlePayFine} className="mt-2">Pay Fine</Button>
+            <Button onClick={handleContactSupport} className="mt-2 ml-2">Contact Support</Button>
+          </div>
+        )}
         <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
           {/* Profile Picture */}
           <div className="relative">
@@ -370,6 +437,7 @@ const ProfilePage = () => {
             <div className="flex items-center gap-4">
               <h2 className="text-2xl font-bold">{userData.username}</h2>
               <RatingStars rating={userData.rating} />
+              <span className="text-sm text-gray-500">({userData.type})</span> {/* Add this line */}
             </div>
             <p className="text-gray-600">{userData.email}</p>
 
@@ -492,7 +560,7 @@ const ProfilePage = () => {
                     <img
                       src={JSON.parse(order.post.pictures)[0]}
                       alt={order.post.title}
-                      className="w-12 h-12 rounded-lg object-cover"
+                      className="w-16 h-16 rounded-lg object-cover"
                     />
                     <div className="flex-1">
                       <p className="font-medium truncate">{order.post.title}</p>
@@ -532,7 +600,7 @@ const ProfilePage = () => {
                   <img
                     src={JSON.parse(bid.post.pictures)[0]}
                     alt={bid.post.title}
-                    className="w-12 h-12 rounded-lg object-cover"
+                    className="w-16 h-16 rounded-lg object-cover"
                   />
                   <div className="flex-1">
                     <p className="font-medium truncate">{bid.post.title}</p>
@@ -562,13 +630,18 @@ const ProfilePage = () => {
         <div className="space-y-4">
           {userIssues.map((issue) => (
         <Card key={issue.id}>
-          <CardHeader>
-            <CardTitle className="text-base font-medium">
-          Issue reported by {issue.issuer.username}
-            </CardTitle>
-            <p className="text-sm text-gray-500">
-          {new Date(issue.created_at).toLocaleDateString()}
-            </p>
+          <CardHeader onClick={() => router.push(`/issues/${issue.id}`)} className="flex justify-between flex-row items-center">
+            <div>
+              <CardTitle className="text-base font-medium">
+            Issue reported by {issue.issuer.username}
+              </CardTitle>
+              <p className="text-sm text-gray-500">
+            {new Date(issue.created_at).toLocaleDateString()}
+              </p>
+            </div>
+            <span className={`text-white px-2 py-1 rounded ${getStatusColor(issue.status)}`}>
+              {issue.status}
+            </span>
           </CardHeader>
           <CardContent>
             <Collapsible>
