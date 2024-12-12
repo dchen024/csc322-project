@@ -263,9 +263,15 @@ const AccountPage = () => {
                 variant="outline"
                 className="w-full mt-4"
                 onClick={() => setIsWithdrawing(true)}
+                disabled={user.suspended} // Disable the button if the user is suspended
               >
                 Withdraw Funds
               </Button>
+              {user.suspended && ( // Show a message if the user is suspended
+                <div className="text-red-500 text-center mt-2">
+                  You need to reactivate your account before you can withdraw your funds.
+                </div>
+              )}
             </div>
 
             <Dialog open={isWithdrawing} onOpenChange={setIsWithdrawing}>

@@ -15,7 +15,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { table } from 'console';
 
 const supabase = createClient();
@@ -55,6 +55,7 @@ const calculateTimeRemaining = (expireDate: string) => {
   if (days > 0) return `${days}d ${hours}h`;
   if (hours > 0) return `${hours}h ${minutes}m`;
   if (minutes > 0) return `${minutes}m ${seconds}s`;
+  console.log(seconds, expireDate);
   return `${seconds}s`;
 };
 
@@ -71,6 +72,8 @@ const ListingPage = () => {
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [userBalance, setUserBalance] = useState(0);
   const [bidError, setBidError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
   console.log(id);
 
   useEffect(() => {
@@ -250,16 +253,6 @@ const ListingPage = () => {
   
       if (error) throw error;
   
-      // Update user balance
-      const { error: balanceError } = await supabase
-        .from('Users')
-        .update({ 
-          balance: userBalance - bidInCents 
-        })
-        .eq('id', userId);
-  
-      if (balanceError) throw balanceError;
-  
       // Record bid
       const { error: bidError } = await supabase.from('bids').insert({
         post_id: post?.id,
@@ -272,7 +265,6 @@ const ListingPage = () => {
       setPost({...post!, current_bid: bidInCents});
       setIsBidding(false);
       setBidAmount('');
-      setUserBalance(userBalance - bidInCents); // Update local balance
     } catch (error) {
       console.error('Error placing bid:', error);
       setBidError('Error placing bid. Please try again.');
@@ -322,6 +314,17 @@ const ListingPage = () => {
       console.error('Error toggling watchlist:', error);
     }
   };
+
+  // Inside the return statement, before the main content
+  if (error) return (
+    <div className="flex justify-center items-center min-h-screen">
+      <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
+        <p className="font-bold">Account Suspended</p>
+        <p>{error}</p>
+        <Button onClick={() => router.push('/reactivate')} className="mt-2">Reactivate Account</Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">

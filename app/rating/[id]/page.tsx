@@ -93,44 +93,83 @@ const RatingPage = () => {
     fetchOrder();
   }, [id]);
 
-  const updateSellerRating = async () => {
+  // Update the seller's rating and handle bad reviews
+    const updateSellerRating = async () => {
     if (!order) return;
-
+  
     try {
       const { data: reviews, error: reviewsError } = await supabase
         .from('reviews')
         .select('rate')
         .eq('reviewee', order.seller);
-
+  
       if (reviewsError) throw reviewsError;
-
+  
       // Handle no reviews case
       if (!reviews || reviews.length === 0) {
         const { error: updateError } = await supabase
           .from('Users')
           .update({ rating: rating })
           .eq('id', order.seller);
-
+  
         if (updateError) throw updateError;
         return;
       }
-
+  
       // Calculate average including new rating
       const totalRating = reviews.reduce((acc, review) => acc + (review.rate || 0), 0);
       const averageRating = (totalRating + rating) / (reviews.length + 1);
-
+  
       const { error: updateError } = await supabase
         .from('Users')
         .update({ rating: averageRating })
         .eq('id', order.seller);
-
+  
       if (updateError) throw updateError;
+  
+      // Handle bad reviews
+      if (rating <= 2) {
+        const { data: sellerData, error: sellerError } = await supabase
+          .from('Users')
+          .select('bad_review, suspended, type')
+          .eq('id', order.seller)
+          .single();
+  
+        if (sellerError) throw sellerError;
+  
+        let { bad_review, suspended, type } = sellerData;
+  
+        if (type === 'vip') {
+          // Downgrade VIP user to regular user
+          const { error: downgradeError } = await supabase
+            .from('Users')
+            .update({ bad_reviews: 0, type: 'user', warning: true })
+            .eq('id', order.seller);
+  
+          if (downgradeError) throw downgradeError;
+        } else if (bad_review >= 3) {
+          // Reset bad reviews and suspend the seller
+          const { error: suspendError } = await supabase
+            .from('Users')
+            .update({ bad_reviews: 0, suspended: true, warning: true })
+            .eq('id', order.seller);
+  
+          if (suspendError) throw suspendError;
+        } else {
+          // Increment bad reviews and set warning
+          const { error: badReviewError } = await supabase
+            .from('Users')
+            .update({ bad_review: bad_review + 1, warning: true })
+            .eq('id', order.seller);
+  
+          if (badReviewError) throw badReviewError;
+        }
+      }
     } catch (err) {
       console.error('Error updating seller rating:', err);
       throw err;
     }
   };
-
   const handleSubmit = async () => {
     if (!order) return;
 

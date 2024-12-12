@@ -24,7 +24,7 @@ interface OrderDetails {
   name: string;
   image: string;
   subtotal: number;
-  shipping: number;
+  service_fee: number; // Renamed from shipping
   tax: number;
   total: number;
 }
@@ -57,7 +57,7 @@ const CheckoutPage = () => {
     name: '',
     image: '',
     subtotal: 0,
-    shipping: 0,
+    service_fee: 0, // Renamed from shipping
     tax: 0,
     total: 0
   });
@@ -75,7 +75,7 @@ const CheckoutPage = () => {
   });
   const router = useRouter();
 
-  // Update fetchPost function
+  // Updated fetchPost function
   const fetchPost = async () => {
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -88,12 +88,17 @@ const CheckoutPage = () => {
       // Get user balance
       const { data: userData, error: balanceError } = await supabase
         .from('Users')
-        .select('balance')
+        .select('balance, suspended')
         .eq('id', user?.id)
         .single();
 
       if (balanceError) throw balanceError;
       setUserBalance(userData.balance);
+
+      if (userData.suspended) {
+        setError('Your account is suspended. Please reactivate your account to complete the purchase.');
+        return;
+      }
 
       // Get post details
       const { data, error } = await supabase
@@ -120,16 +125,16 @@ const CheckoutPage = () => {
 
       const pictures = JSON.parse(data.pictures);
       const subtotal = data.current_bid;
-      const shipping = Math.round(subtotal * 0.10); // 10% shipping
+      const service_fee = Math.round(subtotal * 0.05); // 5% service fee
       const tax = Math.round(subtotal * 0.08875); // 8.875% tax
       setPost(data);
       setOrderDetails({
         name: data.title,
         image: pictures[0] || '/placeholder.jpg',
         subtotal,
-        shipping,
+        service_fee, // Updated
         tax,
-        total: subtotal + shipping + tax
+        total: subtotal + service_fee + tax // Updated total
       });
     } catch (err) {
       setError('Error loading checkout details');
@@ -162,7 +167,7 @@ const CheckoutPage = () => {
     if (post?.poster_id) fetchSeller();
   }, [post?.poster_id]);
 
-  // Update handlePurchase function
+  // Updated handlePurchase function
   const handlePurchase = async () => {
     try {
       setIsLoading(true);
@@ -175,7 +180,7 @@ const CheckoutPage = () => {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
       
-      // Update user balance
+      // Update user balance (buyer)
       const { error: balanceError } = await supabase
         .from('Users')
         .update({ 
@@ -206,7 +211,27 @@ const CheckoutPage = () => {
         .eq('id', post?.id);
 
       if (postError) throw postError;
-      
+
+      // Fetch seller's current balance
+      const { data: sellerData, error: sellerError } = await supabase
+        .from('Users')
+        .select('balance')
+        .eq('id', post?.poster_id)
+        .single();
+
+      if (sellerError) throw sellerError;
+
+      // Calculate seller's new balance
+      const sellerShare = Math.round(orderDetails.subtotal * 0.90);
+      const newSellerBalance = (sellerData.balance || 0) + sellerShare;
+
+      // Update seller's balance
+      const { error: sellerBalanceError } = await supabase
+        .from('Users')
+        .update({ balance: newSellerBalance })
+        .eq('id', post?.poster_id);
+
+      if (sellerBalanceError) throw sellerBalanceError;
 
       // Redirect to rating page with order ID
       router.push(`/rating/${orderData.id}`);
@@ -222,8 +247,17 @@ const CheckoutPage = () => {
     return Object.values(shippingAddress).every(value => value.trim() !== '');
   };
 
+  if (error) return (
+    <div className="flex justify-center items-center min-h-screen">
+      <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
+        <p className="font-bold">Account Suspended</p>
+        <p>{error}</p>
+        <Button onClick={() => router.push('/reactivate')} className="mt-2">Reactivate Account</Button>
+      </div>
+    </div>
+  );
+
   if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>{error}</div>;
   if (!post) return <div>Post not found</div>;
 
   return (
@@ -334,8 +368,8 @@ const CheckoutPage = () => {
               <span>${(orderDetails.subtotal / 100).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span>Shipping</span>
-              <span>${(orderDetails.shipping / 100).toFixed(2)}</span>
+              <span>Service Fee</span>
+              <span>${(orderDetails.service_fee / 100).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Tax </span>
