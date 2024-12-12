@@ -161,10 +161,10 @@ const ListingPage = () => {
   
       if (userError) return;
       
-      if (userData.type === 'visitor') {
-        setError('Visitors cannot place bids. Please upgrade your account.');
-        return;
-      }
+      //if (userData.type === 'visitor') {
+      //  setError('Visitors cannot place bids. Please upgrade your account.');
+      //  return;
+      //}
   
       setUserBalance(userData.balance);
       if (userData.suspended) {
