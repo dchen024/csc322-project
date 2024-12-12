@@ -1,58 +1,82 @@
 # BidBay - Online Auction Platform
-CSC 32200 Software Engineering Project - Fall 2023  
+CSC 32200 Software Engineering Project - Fall 2024  
 City College of New York
 
 [LOGO PLACEHOLDER]
 
 ## Overview
-BidBay is a modern online auction platform where users can list items for sale and participate in real-time bidding. Built with Next.js and Supabase, it provides a seamless experience for buyers and sellers.
+BidBay is a modern online auction platform supporting three user types - Visitors, Users, and Super-users, each with distinct privileges and responsibilities. Built with Next.js and Supabase, it provides a comprehensive bidding ecosystem.
 
-## Features
+## Documentation
+[Click here to read the documentation](documentation.md)
+## User Types & Flows
 
-### User Authentication
-- Secure sign-up and login
-- Profile management with ratings
+### 1. Visitor (V)
+- Browse active listings
+- View item details and comments
+- Apply for User status
+  - Complete human verification (arithmetic challenge)
+  - Await Super-user approval
 
-<img src = "public/Screenshot 2024-12-06 at 9.26.49 PM.png
-" alt = "image of login page"/>
+### 2. User (U)
+- Account Management
+  - Deposit/withdraw funds
+  - Track transaction history
+  - Monitor account rating
+  
+- Selling
+  - Create item listings
+  - Set starting bids
+  - Choose winning bids
+  - Receive payments
+  
+- Buying
+  - Place bids
+  - Complete transactions
+  - Rate sellers (1-5 scale)
+  - File complaints
+  
+- VIP Status (Automatic upgrade when qualified)
+  - Balance > $5,000
+  - >5 completed transactions
+  - No complaints
+  - 10% transaction discount
 
-### Auction Management
-- Create and manage auction listings
-- Upload multiple images
-- Set starting bids and auction duration
-- Real-time bid updates
+### 3. Super-user (S)
+- User Management
+  - Review visitor applications
+  - Handle user complaints
+  - Manage suspensions
+  - Process reactivation requests
 
-<img src = "public/Screenshot 2024-12-06 at 9.28.54 PM.png" alt= "image of posting page"/>
+## Key Features
 
-### Bidding System
-- Real-time bidding
-- Automatic bid validation
-- Outbid notifications
-- Auction countdown timer
+### Rating System
+- Anonymous 1-5 scale ratings
+- Automatic suspension triggers:
+  - Rating < 2 from ≥3 users
+  - Average rating <2 or >4 (with ≥3 ratings)
+- $50 fine or admin approval for reactivation
+- Three suspensions result in permanent removal
 
-<img src = "public/Screenshot 2024-12-06 at 9.29.58 PM.png" alt = "image of bid entry">
+### VIP Benefits
+- 10% discount on transactions
+- Suspension immunity (downgrades to User)
+- All standard User privileges
 
-### Search & Filters
-- Search by keyword
-- Filter by price range
-- Filter by auction status
-- Sort by various criteria
-
-<img src = "public/Screenshot 2024-12-06 at 9.31.36 PM.png" alt = "picture of filtering and searching">
-
-### Payment Integration
-- Secure checkout process
-- Multiple payment methods
-- Order confirmation
-- Transaction history
-
-<img src = "public/Screenshot 2024-12-06 at 9.39.01 PM.png" alt = "picture of checkout">
+### Transaction Security
+- Balance verification
+- Real-time bid validation
+- Escrow system
+- Dispute resolution
 
 ## Tech Stack
-- Frontend: Next.js 15, React 19, TypeScript, Tailwind CSS
-- Backend: Supabase (PostgreSQL)
-- Authentication: Supabase Auth
-- Storage: Supabase Storage Buckets
+- Frontend: Next.js 14, React, TypeScript, Tailwind CSS
+- Backend: Supabase
+  - PostgreSQL Database
+  - Authentication
+  - Real-time subscriptions
+  - Row Level Security
 - Deployment: Vercel
 
 ## Installation
@@ -61,23 +85,36 @@ BidBay is a modern online auction platform where users can list items for sale a
 ```bash
 git clone https://github.com/dchen024/csc322-project
 ```
+
 2. Install dependencies
 ```bash
 npm install
 ```
-3. Set up environment variables (fill them in!)
+
+3. Set up environment variables
 ```txt
 NEXT_PUBLIC_SUPABASE_URL=<your-supabase-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 ```
-4. Start the development server
+
+4. Start development server
 ```bash
 npm run dev
 ```
 
-Team Members
-Evan Haque - Frontend Developer
+## Database Schema
+Includes tables for:
+- Users (authentication & profiles)
+- Posts (auction listings)
+- Bids (auction participation)
+- Orders (transactions)
+- Reviews (ratings)
+- Issues (complaints)
+- Applications (user registration)
+- Watchlist (saved items)
 
-License
-This project is part of the CSC 32200 Software Engineering course and is for educational purposes only. ```
+## Team
+Evan Haque - Frontend Web developer
 
+## License
+This project is part of the CSC 32200 Software Engineering course and is for educational purposes only.
