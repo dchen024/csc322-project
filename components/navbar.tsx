@@ -1,6 +1,6 @@
 "use client"
 import React, { useEffect, useState } from 'react';
-import { Menu, X, User, Home, ShoppingBag, Heart, Settings, LogOut, Plus, Package, Wallet } from 'lucide-react';
+import { Menu, X, User, Home, ShoppingBag, Heart, Settings, LogOut, Plus, Package, Wallet, LayoutDashboard, HelpCircle, Users, AlertCircle, UserPlus } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -41,6 +41,11 @@ const Navbar = () => {
     { icon: Heart, label: 'Watchlist', href: '/watchlist' },
     { icon: Wallet, label: 'Reload Balance', href: '/reload' },
     { icon: Plus, label: 'Post', href: '/post' },
+    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+    { icon: AlertCircle, label: 'Issues', href: '/issues' },
+    { icon: Users, label: 'Profile', href: '/profile' },
+    { icon: UserPlus, label: 'User Sign-up', href: '/user-sign-up' },
+    { icon: HelpCircle, label: 'Support', href: '/support' },
   ];
 
   const goToProfile = () => {
