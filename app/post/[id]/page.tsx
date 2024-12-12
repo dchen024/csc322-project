@@ -9,7 +9,8 @@ import {
   Heart,
   User,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Loader2
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -21,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useParams, useRouter } from 'next/navigation';
 import { table } from 'console';
 import { formatDistance } from 'date-fns';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
 const supabase = createClient();
 
@@ -96,6 +98,9 @@ const ListingPage = () => {
   const [currentUsername, setCurrentUsername] = useState('');
   const [showBidHistory, setShowBidHistory] = useState(false);
   const [bidHistory, setBidHistory] = useState<Bid[]>([]);
+  const [showSmartBid, setShowSmartBid] = useState(false);
+  const [smartBidAnalysis, setSmartBidAnalysis] = useState('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const router = useRouter();
   console.log(id);
 
@@ -463,6 +468,31 @@ const ListingPage = () => {
     }
   };
 
+  const getSmartBidAnalysis = async () => {
+    setIsAnalyzing(true);
+    try {
+      const response = await fetch('/api/smart-bid', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: post.title,
+          description: post.description,
+          currentBid: post.current_bid / 100
+        }),
+      });
+
+      console.log(post.title, post.description, post.current_bid / 100);
+  
+      const data = await response.json();
+      setSmartBidAnalysis(data.analysis);
+    } catch (error) {
+      setSmartBidAnalysis('Unable to analyze at this moment.');
+    }
+    setIsAnalyzing(false);
+  };
+
   // Inside the return statement, before the main content
   if (error) return (
     <div className="flex justify-center items-center min-h-screen">
@@ -561,7 +591,27 @@ const ListingPage = () => {
           </div>
         </CardContent>
 
-        <CardFooter>
+        <CardFooter className="flex flex-col space-y-4">
+          <Collapsible 
+            open={showSmartBid} 
+            onOpenChange={() => {
+              setShowSmartBid(!showSmartBid);
+              if (!showSmartBid && !smartBidAnalysis) {
+                getSmartBidAnalysis();
+              }
+            }}
+          >
+            <CollapsibleTrigger asChild>
+              <Button variant="ghost" size="sm" className="w-full">
+                💡 Smart Bid Analysis
+                {isAnalyzing && <Loader2 className="ml-2 h-4 w-4 animate-spin" />}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="p-4 bg-gray-50 rounded-lg">
+              {smartBidAnalysis || 'Analyzing...'}
+            </CollapsibleContent>
+          </Collapsible>
+
           {post.status === 'completed' ? (
             <Button className="w-full" disabled>
               Auction Ended
