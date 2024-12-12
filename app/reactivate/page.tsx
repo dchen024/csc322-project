@@ -30,7 +30,7 @@ const ReactivatePage = () => {
 
         const { data: userData, error: profileError } = await supabase
           .from('Users')
-          .select('suspended, balance')
+          .select('suspended, balance, suspended_times')
           .eq('id', user.id)
           .single();
 
@@ -42,6 +42,10 @@ const ReactivatePage = () => {
           router.push('/home');
         } else {
           setBalance(userData.balance);
+          if (userData.suspended_times >= 3) {
+            setError('Account permanently disabled. Please contact support.');
+            return;
+          }
         }
         // Inside checkUserStatus function, after fetching user data
         if (userData) {
@@ -67,10 +71,25 @@ const ReactivatePage = () => {
     try {
       setLoading(true);
 
-      // Deduct the fine amount from the user's balance
+      const { data: userData } = await supabase
+        .from('Users')
+        .select('suspended_times')
+        .eq('id', user.id)
+        .single();
+
+      if (userData?.suspended_times >= 3) {
+        setError('Account permanently disabled. Please contact support.');
+        return;
+      }
+
       const { error: balanceError } = await supabase
         .from('Users')
-        .update({ balance: balance - fineAmount, suspended: false })
+        .update({ 
+          balance: balance - fineAmount, 
+          suspended: false,
+          suspended_times: (userData?.suspended_times || 0) + 1,
+          bad_review: 0 // Reset bad reviews to 0
+        })
         .eq('id', user.id);
 
       if (balanceError) throw balanceError;
