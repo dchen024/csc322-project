@@ -5,7 +5,7 @@ const genAI = new GoogleGenerativeAI(process.env.NEXT_PUBLIC_GEMINI_API_KEY!);
 export async function POST(request: Request) {
   const { title, description, currentBid } = await request.json();
 
-  const prompt = `This is the item: ${title}, this is the description of the item: ${description}, this is the current highest bid $${currentBid}, do you think it is smart to make a higher bid? return a short and concise answer`;
+  const prompt = `The item is ${title}, this is the description of the item: ${description}, this is the current highest bid $${currentBid}, do you think it is smart to make a higher bid?`;
 
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
