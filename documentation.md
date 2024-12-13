@@ -168,7 +168,7 @@ CREATE TABLE public.issues (
 
 ### Visitor (V)
 - Browse listings
-- View comments
+- View and make comments
 - Apply for user status
 
 ### User (U)
@@ -227,6 +227,41 @@ POST /auth/logout
   - Bid status changes
   - Auction updates
   - Account status changes
+
+### Smart Bid Analysis
+
+#### Overview
+The Smart Bid Analysis feature uses Google's Gemini AI to provide intelligent bidding recommendations based on:
+- Item title
+- Item description 
+- Current bid amount
+
+#### Implementation
+
+##### Client-side Function (`/post/[id]`)
+```typescript
+const getSmartBidAnalysis = async () => {
+  // Fetches AI-powered bid analysis
+  // Sends post details to /api/smart-bid
+  // Updates UI with recommendation
+}
+```
+
+##### API Endpoint
+```markdown
+POST /api/smart-bid
+Content-Type: application/json
+
+Request body: {
+  title: string,
+  description: string,
+  currentBid: number
+}
+
+Response: {
+  analysis: string
+}
+```
 
 ## Security Measures
 
@@ -290,6 +325,7 @@ npm install
 ```
 NEXT_PUBLIC_SUPABASE_URL=<your-supabase-url>
 NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+NEXT_PUBLIC_GEMINI_API_KEY=<your-gemini-api-key>
 ```
 
 
@@ -313,6 +349,12 @@ npm run dev
 - VIP status calculations
 - Suspension triggers
 - Rating system
+
+// Smart Bid Analysis Tests
+- API response validation
+- Error handling
+- Loading state management
+- UI component rendering
 ```
 
 #### Integration Tests
