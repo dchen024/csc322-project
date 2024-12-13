@@ -58,7 +58,7 @@ export default function UserApplicationPage() {
       .eq('user_id', user.id)
       .single();
 
-    if (existingApplication) {
+    if (existingApplication && existingApplication.status == 'initiated' || existingApplication?.status == 'under-review') {
       toast({
         title: "Application Pending",
         description: "You already have a submitted application being reviewed.",
